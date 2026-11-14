@@ -29,6 +29,7 @@ public class NoteReader : MonoBehaviour, IInteractable
         if (player != null) player.SetMovementLocked(this, true);
 
         NoteUIManager.Instance.ShowNote(noteText);
+        SfxLibrary.PlayUI("note_open");
     }
 
     void CloseNote()
@@ -43,5 +44,6 @@ public class NoteReader : MonoBehaviour, IInteractable
 
         currentReader = null;
         NoteUIManager.Instance.HideNote();
+        SfxLibrary.PlayUI("note_close");
     }
 }

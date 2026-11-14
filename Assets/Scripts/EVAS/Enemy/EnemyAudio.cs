@@ -32,6 +32,17 @@ public class EnemyAudioController : MonoBehaviour
         audioSource = GetComponent<AudioSource>();
         audioSource.playOnAwake = false;
         AudioManager.RouteToSfx(audioSource);
+
+        // ช่องที่ยังไม่ได้ใส่คลิปใน Inspector: ใช้เสียงจาก SfxLibrary (Resources/Audio/SFX) แทน
+        if (footstepClips == null || footstepClips.Length == 0)
+        {
+            footstepClips = SfxLibrary.GetClips("enemy_footstep");
+            if (footstepClips.Length == 0)
+                footstepClips = SfxLibrary.GetClips("footstep");
+        }
+
+        if (alertSound == null)
+            alertSound = SfxLibrary.Pick("enemy_alert");
     }
 
     /// <summary>เรียกทุกเฟรมพร้อมความเร็วปัจจุบันของ agent จัดการ cooldown ให้เอง</summary>

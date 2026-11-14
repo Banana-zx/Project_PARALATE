@@ -12,5 +12,5 @@ public static class SceneNames
     public const string Options = "OptionsMenu";
 
     /// <summary>ด่านที่เลือกเล่นได้จากฮับ เรียงตาม index ที่ LevelManager.LoadLevel ใช้</summary>
-    public static readonly string[] Levels = { "Level1", "Level2", "Level3" };
+    public static readonly string[] Levels = { "HideOut" };
 }

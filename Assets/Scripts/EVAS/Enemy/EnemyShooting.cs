@@ -43,6 +43,8 @@ public class EnemyShooting : MonoBehaviour
     private int combinedLineOfSightMask;
     private Coroutine shootRoutine;
 
+    public float ShootingRange => shootingRange;
+
     private static readonly RaycastHit[] lineOfSightHits = new RaycastHit[16];
 
     private Transform cachedAimTarget;

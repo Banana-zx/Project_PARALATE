@@ -31,6 +31,16 @@ public class EnemyHealth : MonoBehaviour
     private void Awake()
     {
         enemyController = GetComponent<EnemyController>();
+        HeadHitbox.EnsureOn(this);
+    }
+
+    /// <summary>ดาเมจจากปืน: isHeadshot = true เมื่อกระสุนผ่าน HeadHitbox (ตัวคูณมาจากปืนแต่ละกระบอก)</summary>
+    public void TakeDamage(float amount, bool isHeadshot)
+    {
+        if (isHeadshot && !isDead)
+            SfxLibrary.Play("headshot", transform.position);
+
+        TakeDamage(amount);
     }
 
     private void Start()
@@ -92,7 +102,8 @@ public class EnemyHealth : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
-        if (isDead || isStunned)
+        // ศัตรูที่สลบอยู่ยังรับดาเมจได้ (ยิง/ฟัน/กด F ฆ่าตอนสลบได้) เดิมถูกกันไว้ทำให้ฆ่าไม่ได้เลย
+        if (isDead)
             return;
 
         currentHealth = Mathf.Max(currentHealth - amount, 0f);
@@ -112,6 +123,16 @@ public class EnemyHealth : MonoBehaviour
     private void Die()
     {
         isDead = true;
+
+        // ตายตอนสลบ: หยุดตัวนับเวลาฟื้น ไม่ให้ลุกขึ้นมายืนหลังตาย
+        if (knockOutRoutine != null)
+        {
+            StopCoroutine(knockOutRoutine);
+            knockOutRoutine = null;
+        }
+
+        bool wasStunned = isStunned;
+        isStunned = false;
         SetMovementLocked(true);
 
         switch (onDeath)
@@ -131,6 +152,10 @@ public class EnemyHealth : MonoBehaviour
             case DeathAction.Revive:
                 // ชุบชีวิต กลับมาเลือดเต็ม
                 isDead = false;
+                if (wasStunned)
+                    transform.rotation = standingRotation;
+                if (healthCanvas != null)
+                    healthCanvas.gameObject.SetActive(true);
                 SetMovementLocked(false);
                 currentHealth = maxHealth;
                 UpdateHealthBar();

@@ -18,6 +18,7 @@ public class ResourcePickup : MonoBehaviour, IInteractable
 
         RunInventory.Instance.Add(resourceData, amount);
         AudioManager.PlayPickup(resourceData.pickupSound, transform.position);
+        HudToast.Show("+ " + resourceData.resourceName + " x" + amount);
 
         Destroy(gameObject);
     }

@@ -19,7 +19,12 @@ public class PlayerHealth : MonoBehaviour
 
     void Start()
     {
-        maxHealth = health;
+        // เคารพค่า Max Health ที่ตั้งใน Inspector (เดิมถูกเขียนทับด้วย health เสมอ)
+        if (maxHealth <= 0f)
+            maxHealth = health;
+
+        if (health <= 0f || health > maxHealth)
+            health = maxHealth;
         spawnPosition = transform.position;
         spawnRotation = transform.rotation;
         characterController = GetComponent<CharacterController>();
@@ -44,6 +49,7 @@ public class PlayerHealth : MonoBehaviour
 
         health = Mathf.Max(health - damage, 0f);
         UpdateHealthBar();
+        SfxLibrary.Play("player_hurt");
 
         if (health <= 0f)
             Die();

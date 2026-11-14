@@ -142,7 +142,7 @@ public class KnockoutSystem : MonoBehaviour
     {
         if (knockOutAction.WasPressedThisFrame() && !isHoldingKnockout)
         {
-            if (!TryGetTarget(out EnemyHealth enemy))
+            if (!TryGetTarget(out EnemyHealth enemy) || enemy.IsStunned)
                 return;
 
             bool hasKnife = pickupSystem != null && pickupSystem.HasKnifeEquipped;
@@ -193,6 +193,7 @@ public class KnockoutSystem : MonoBehaviour
         {
             // EnemyHealth ล็อกศัตรูด้วย key ของตัวเองตอนสลบ จึงปลดเฉพาะล็อกของระบบนี้ได้เลย
             knockoutTarget.KnockOut(knockoutStunDuration);
+            SfxLibrary.Play("knockout", knockoutTarget.transform.position);
             Debug.Log(GetKnockoutSuccessMessage(currentKnockoutType));
         }
 
@@ -244,7 +245,7 @@ public class KnockoutSystem : MonoBehaviour
 
     bool IsTargetStillValid(EnemyHealth enemy)
     {
-        if (enemy == null || !CanTarget(enemy))
+        if (enemy == null || enemy.IsStunned || !CanTarget(enemy))
             return false;
 
         return TryGetTarget(out EnemyHealth currentTarget) && currentTarget == enemy;
@@ -252,8 +253,12 @@ public class KnockoutSystem : MonoBehaviour
 
     bool CanTarget(EnemyHealth enemy)
     {
-        if (enemy.IsDead || enemy.IsStunned)
+        if (enemy.IsDead)
             return false;
+
+        // ศัตรูที่สลบ: เข้าไปกด F ฆ่าได้จากทุกทิศ (รัดคอซ้ำไม่ได้ ดู HandleKnockoutHold)
+        if (enemy.IsStunned)
+            return true;
 
         if (!requireTargetOutsideVisionCone)
             return true;
@@ -348,6 +353,7 @@ public class KnockoutSystem : MonoBehaviour
         if (enemy != null)
         {
             enemy.TakeDamage(9999f);
+            SfxLibrary.Play("stealth_kill", enemy.transform.position);
             Debug.Log(GetKillSuccessMessage(actionType));
         }
 

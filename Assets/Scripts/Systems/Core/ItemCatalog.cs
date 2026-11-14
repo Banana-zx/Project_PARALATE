@@ -1,0 +1,153 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+public enum ItemCategory
+{
+    Resource,
+    Ammo,
+    PassiveChip,
+    ActiveChip,
+    MapData
+}
+
+public enum AmmoType
+{
+    Auto = 0,   // เดาจากชื่ออาวุธ (usp/pistol = Pistol, sniper = Sniper, อื่นๆ = Rifle)
+    Rifle = 1,  // AK
+    Pistol = 2, // USP
+    Sniper = 3
+}
+
+public enum WeaponSlotType
+{
+    Auto = 0,     // ปืนพก/มีด = Secondary, อื่นๆ = Primary
+    Primary = 1,
+    Secondary = 2
+}
+
+public enum HeldSlot
+{
+    Unarmed = 0,
+    Primary = 1,
+    Secondary = 2,
+    XGear = 3
+}
+
+public sealed class ItemDef
+{
+    public string id;
+    public string displayName;
+    public string description;
+    public ItemCategory category;
+    public Color color = Color.white;
+
+    /// <summary>ใช้กับ MapData: ชื่อ Scene ที่แผนที่นี้ใช้ได้</summary>
+    public string sceneName;
+}
+
+/// <summary>
+/// ทะเบียนไอเทมทั้งหมดของเกม (แหล่งข้อมูลเดียว): Inventory, X-Gear, Upgrade Corner และหน้า Pause อ่านจากที่นี่
+/// เพิ่มไอเทมใหม่ = เพิ่มบรรทัดใน Build() บรรทัดเดียว ไม่ต้องแก้ UI
+/// ไอคอน (ไม่บังคับ): วาง Sprite ชื่อเดียวกับ id ไว้ที่ Resources/Icons/
+/// </summary>
+public static class ItemCatalog
+{
+    public const string Scrap = "Scrap";
+    public const string Metal = "Metal";
+    public const string AmmoRifle = "ammo_ak";
+    public const string AmmoPistol = "ammo_usp";
+    public const string AmmoSniper = "ammo_sniper";
+    public const string ChipFleetFoot = "chip_fleetfoot";
+    public const string ChipInvisible = "chip_invisible";
+    public const string MapHideOut = "map_hideout";
+
+    private static Dictionary<string, ItemDef> defs;
+    private static List<ItemDef> ordered;
+    private static readonly Dictionary<string, Sprite> icons = new Dictionary<string, Sprite>();
+
+    private static void Build()
+    {
+        defs = new Dictionary<string, ItemDef>();
+        ordered = new List<ItemDef>();
+
+        Add(Scrap, "Scrap", "Salvaged parts. Used for upgrades and crafting.", ItemCategory.Resource, new Color(0.8f, 0.6f, 0.35f));
+        Add(Metal, "Metal", "Refined metal. Used for crafting ammo.", ItemCategory.Resource, new Color(0.7f, 0.75f, 0.8f));
+
+        Add(AmmoRifle, "AK Ammo", "7.62mm rounds for the AK47.", ItemCategory.Ammo, new Color(0.95f, 0.8f, 0.3f));
+        Add(AmmoPistol, "USP Ammo", ".45 rounds for the USP.", ItemCategory.Ammo, new Color(0.95f, 0.8f, 0.3f));
+        Add(AmmoSniper, "Sniper Ammo", "High-caliber rounds for the sniper rifle.", ItemCategory.Ammo, new Color(0.95f, 0.8f, 0.3f));
+
+        Add(ChipFleetFoot, "Passive Chip : FleetFoot", "Passive. Crouch movement speed +5%.", ItemCategory.PassiveChip, new Color(0.4f, 0.9f, 0.5f));
+        Add(ChipInvisible, "Active Chip : Invisible",
+            "Active. Become invisible for 5 seconds. Enemies cannot detect you by sight.\nSwitch to X-Gear and press Left Click. One use per mission.",
+            ItemCategory.ActiveChip, new Color(0.35f, 0.7f, 1f));
+
+        ItemDef map = Add(MapHideOut, "Map Data : HideOut", "Shows the full HideOut minimap, including enemies.", ItemCategory.MapData, new Color(0.9f, 0.5f, 0.9f));
+        map.sceneName = "HideOut";
+    }
+
+    private static ItemDef Add(string id, string name, string description, ItemCategory category, Color color)
+    {
+        ItemDef def = new ItemDef { id = id, displayName = name, description = description, category = category, color = color };
+        defs[id] = def;
+        ordered.Add(def);
+        return def;
+    }
+
+    public static IReadOnlyList<ItemDef> All
+    {
+        get
+        {
+            if (defs == null) Build();
+            return ordered;
+        }
+    }
+
+    /// <summary>ไม่คืน null: id ที่ไม่รู้จัก (เช่น ResourceData ใหม่) จะได้ข้อมูลพื้นฐานที่ใช้ชื่อ id</summary>
+    public static ItemDef Get(string id)
+    {
+        if (defs == null) Build();
+
+        if (string.IsNullOrEmpty(id))
+            return null;
+
+        if (!defs.TryGetValue(id, out ItemDef def))
+        {
+            def = new ItemDef { id = id, displayName = id, description = string.Empty, category = ItemCategory.Resource };
+            defs[id] = def;
+            ordered.Add(def);
+        }
+
+        return def;
+    }
+
+    public static string NameOf(string id)
+    {
+        ItemDef def = Get(id);
+        return def != null ? def.displayName : "-";
+    }
+
+    public static Sprite IconOf(string id)
+    {
+        if (string.IsNullOrEmpty(id))
+            return null;
+
+        if (!icons.TryGetValue(id, out Sprite sprite))
+        {
+            sprite = Resources.Load<Sprite>("Icons/" + id);
+            icons[id] = sprite;
+        }
+
+        return sprite;
+    }
+
+    public static string AmmoId(AmmoType type)
+    {
+        switch (type)
+        {
+            case AmmoType.Pistol: return AmmoPistol;
+            case AmmoType.Sniper: return AmmoSniper;
+            default: return AmmoRifle;
+        }
+    }
+}

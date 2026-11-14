@@ -13,7 +13,11 @@ public class MainMenuController : MonoBehaviour
     {
         // อนาคตถ้ามีการ New Game ควรจะเคลียร์ Save Data ก่อน
         //LoadLevel(0);
-        UnityEngine.SceneManagement.SceneManager.LoadScene(SceneNames.Tutorial);
+        // ผ่าน LevelManager: ได้ Fade + Loading และล้างของในรอบก่อนหน้า (เดิมเรียก SceneManager ตรงๆ)
+        if (LevelManager.Instance != null)
+            LevelManager.Instance.LoadScene(SceneNames.Tutorial);
+        else
+            SceneManager.LoadScene(SceneNames.Tutorial);
     }
 
     // สำหรับปุ่มเลือกด่าน: ใส่ index ที่ OnClick (0 = Level1, 1 = Level2, ...)

@@ -83,6 +83,10 @@ public class FieldOfView : MonoBehaviour
         if (enemyHealth != null && (enemyHealth.IsStunned || enemyHealth.IsDead))
             return;
 
+        // ชิป Invisible ของ X-Gear: ศัตรูตรวจจับด้วยการมองเห็นไม่ได้ (เสียงยังได้ยินตามปกติ)
+        if (PlayerStealth.IsInvisible)
+            return;
+
         int count = Physics.OverlapSphereNonAlloc(transform.position, radius, rangeBuffer, targetMask);
         for (int i = 0; i < count; i++)
         {
@@ -95,7 +99,7 @@ public class FieldOfView : MonoBehaviour
     }
     public bool IsTargetInVisionCone(Transform target)
     {
-        if (target == null)
+        if (target == null || PlayerStealth.IsInvisible)
             return false;
 
         Vector3 directionToTarget = (target.position - transform.position).normalized;

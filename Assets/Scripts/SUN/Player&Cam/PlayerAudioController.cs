@@ -53,6 +53,28 @@ public class PlayerAudioController : MonoBehaviour
             noiseEmitter = gameObject.AddComponent<PlayerNoiseEmitter>();
 
         BuildSurfaceLookup();
+        AddLibraryFootsteps();
+    }
+
+    // เพิ่มความหลากหลายของเสียงเดิน: รวมไฟล์ footstep_1, footstep_2, ... จาก Resources/Audio/SFX เข้ากับชุดเสียงสำรอง
+    // (วางไฟล์เพิ่มได้เรื่อยๆ ไม่ต้องลากใส่ Inspector)
+    void AddLibraryFootsteps()
+    {
+        AudioClip[] extra = SfxLibrary.GetClips("footstep");
+        if (extra.Length == 0)
+            return;
+
+        List<AudioClip> merged = new List<AudioClip>();
+        if (defaultFootstepClips != null)
+            merged.AddRange(defaultFootstepClips);
+
+        for (int i = 0; i < extra.Length; i++)
+        {
+            if (!merged.Contains(extra[i]))
+                merged.Add(extra[i]);
+        }
+
+        defaultFootstepClips = merged.ToArray();
     }
 
     void BuildSurfaceLookup()

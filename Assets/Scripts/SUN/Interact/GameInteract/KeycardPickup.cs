@@ -19,7 +19,10 @@ public class KeycardPickup : MonoBehaviour, IInteractable
     public void Interact(GameObject interactor)
     {
         PlayerKeycards.GetOrAdd(interactor).Grant(level);
-        AudioManager.PlayPickup(pickupSound, transform.position);
+        if (pickupSound != null)
+            AudioManager.PlayPickup(pickupSound, transform.position);
+        else
+            SfxLibrary.Play("pickup_item");
 
         Destroy(gameObject);
     }

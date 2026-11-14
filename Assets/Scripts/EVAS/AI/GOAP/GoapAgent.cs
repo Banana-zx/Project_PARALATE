@@ -23,6 +23,7 @@ public sealed class GoapAgent : MonoBehaviour
     public EnemyController Controller { get; private set; }
     public FieldOfView FieldOfView { get; private set; }
     public EnemyHealth Health { get; private set; }
+    private EnemyShooting shooting;
     public Transform Target => FieldOfView != null && FieldOfView.playerRef != null ? FieldOfView.playerRef.transform : null;
     public bool IsCombatActive => combatActive;
 
@@ -31,6 +32,7 @@ public sealed class GoapAgent : MonoBehaviour
         Controller = GetComponent<EnemyController>();
         FieldOfView = GetComponent<FieldOfView>();
         Health = GetComponent<EnemyHealth>();
+        shooting = GetComponent<EnemyShooting>();
         GetComponents(actions);
         foreach (GoapAction action in actions) action.EnsureConfigured();
         goals.Add(new GoapGoal("Eliminate Player", 100, new GoapState().Set("targetKilled", true)));
@@ -102,7 +104,9 @@ public sealed class GoapAgent : MonoBehaviour
     private GoapState BuildWorldState()
     {
         bool inSight = FieldOfView != null && FieldOfView.canSeePlayer;
-        bool inRange = Target != null && Vector3.SqrMagnitude(transform.position - Target.position) <= 225f;
+        // ใช้ระยะยิงจริงของ EnemyShooting (เดิม hardcode 15 ม.) ปรับระยะยิงแล้ว AI วางแผนตรงกันเสมอ
+        float range = shooting != null ? shooting.ShootingRange : 15f;
+        bool inRange = Target != null && Vector3.SqrMagnitude(transform.position - Target.position) <= range * range;
         bool lowHealth = Health != null && Health.HealthPercent <= lowHealthThreshold;
         return new GoapState()
             .Set("targetAlerted", true)

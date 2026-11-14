@@ -29,6 +29,7 @@ public class AmmoUIManager : MonoBehaviour
         UnsubscribeFromGun(currentGun);
         currentGun = null;
         currentWeaponInfo = null;
+        labelOverride = null;
 
         if (item == null)
         {
@@ -53,6 +54,20 @@ public class AmmoUIManager : MonoBehaviour
         RefreshDisplay();
     }
 
+    private string labelOverride;
+
+    /// <summary>โชว์ HUD แบบมีแต่ชื่อ (ใช้ตอนถือ X-Gear ที่ไม่ใช่ GameObject อาวุธ) ส่ง null เพื่อปิด</summary>
+    public void SetLabelOnly(string label)
+    {
+        UnsubscribeFromGun(currentGun);
+        currentGun = null;
+        currentWeaponInfo = null;
+        labelOverride = label;
+        isWeaponHeld = !string.IsNullOrEmpty(label);
+        isReloading = false;
+        RefreshDisplay();
+    }
+
     private void OnDisable()
     {
         UnsubscribeFromGun(currentGun);
@@ -67,7 +82,7 @@ public class AmmoUIManager : MonoBehaviour
         gun.OnReloadStatusChanged += HandleReloadChanged;
 
         lastCurrentAmmo = gun.CurrentAmmo;
-        lastMaxAmmo = gun.MagazineSize;
+        lastMaxAmmo = gun.ReserveAmmo;
         isReloading = gun.IsReloading;
         RefreshDisplay();
     }
@@ -104,7 +119,8 @@ public class AmmoUIManager : MonoBehaviour
 
         // ชื่อ/ไอคอน โชว์เสมอไม่ว่าอาวุธชนิดไหน
         if (weaponNameText != null)
-            weaponNameText.text = currentWeaponInfo != null ? currentWeaponInfo.DisplayName : "Weapon";
+            weaponNameText.text = !string.IsNullOrEmpty(labelOverride) ? labelOverride
+                : currentWeaponInfo != null ? currentWeaponInfo.DisplayName : "Weapon";
 
         if (weaponIconImage != null)
         {

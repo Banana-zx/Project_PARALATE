@@ -6,8 +6,8 @@ public class PlaytestResetHotkey : MonoBehaviour
 {
     public static PlaytestResetHotkey Instance { get; private set; }
 
-    const string MainMenuScene = "MainMenu";
-    const string Level0Scene = "Level0(Tutorial)";
+    const string MainMenuScene = SceneNames.MainMenu;
+    const string Level0Scene = SceneNames.Tutorial;
 
     [Header("Playtest Keys")]
     public Key resetToMainMenuKey = Key.L;
@@ -79,6 +79,13 @@ public class PlaytestResetHotkey : MonoBehaviour
 
     static void ResetAndLoad(string sceneName)
     {
+        // ผ่าน LevelManager เพื่อให้มี Fade/Loading และล้างของในรอบเหมือนทางปกติ
+        if (LevelManager.Instance != null)
+        {
+            LevelManager.Instance.LoadScene(sceneName);
+            return;
+        }
+
         if (RunInventory.Instance != null)
             RunInventory.Instance.ClearRun();
 

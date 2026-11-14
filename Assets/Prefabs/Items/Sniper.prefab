@@ -368,7 +368,15 @@ MonoBehaviour:
   firePoint: {fileID: 3954896181780727238}
   range: 200
   damage: 80
-  fireRate: 0.5
+  fireRate: 1.5
+  ammoType: 3
+  slotType: 1
+  headshotMultiplier: 4
+  forceScopeOverlay: 0
+  hitMask:
+    serializedVersion: 2
+    m_Bits: 4294967291
+  logShotHits: 0
   magazineSize: 5
   reloadDuration: 4
   reloadMovementSpeedMultiplier: 0.5
@@ -382,8 +390,9 @@ MonoBehaviour:
   reloadAction: {fileID: 4804699413793143599, guid: 3bdf035a2b3eac841b3fdc702c70b4a7, type: 3}
   enableScope: 1
   normalFieldOfView: 50
-  scopedFieldOfView: 40
+  scopedFieldOfView: 15
   hideCrosshairWhileScoped: 0
+  scopedMovementSpeedMultiplier: 0.4
   useFirstPersonScope: 1
   firstPersonCameraOffset: {x: 0, y: 1.55, z: 0.15}
   firstPersonCameraPriority: 2000
@@ -393,10 +402,10 @@ MonoBehaviour:
   firstPersonMouseSensitivity: 0.12
   minFirstPersonPitch: -70
   maxFirstPersonPitch: 70
-  fireSound: {fileID: 0}
+  fireSound: {fileID: 8300000, guid: aaf59da9c828d39409df3671fbbddcaf, type: 3}
   reloadStartSound: {fileID: 0}
   reloadFinishSound: {fileID: 0}
-  equipSound: {fileID: 0}
+  equipSound: {fileID: 8300000, guid: bbe0341c745783c438700041472581f5, type: 3}
   fireVolume: 1
   reloadVolume: 1
   equipVolume: 1
@@ -428,8 +437,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4cc3eb417998b444f957777de8ef24cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WeaponInfo
-  displayName: Sniper
-  icon: {fileID: 0}
+  itemData: {fileID: 0}
 --- !u!82 &5041806745218822092
 AudioSource:
   m_ObjectHideFlags: 0

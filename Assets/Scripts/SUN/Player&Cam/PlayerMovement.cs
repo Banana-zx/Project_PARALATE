@@ -112,6 +112,12 @@ public class TopDownPlayerController : MonoBehaviour
 
     public bool IsMovementLocked => isMovementLocked;
     public bool IsClimbing => isClimbing;
+    public bool IsVaulting => isVaulting;
+    public bool IsCrouching => isCrouching;
+    public bool IsAiming => isAiming;
+
+    /// <summary>ตัวคูณความเร็วตอนย่อ (ชิป Passive ของ X-Gear เช่น FleetFoot = 1.05)</summary>
+    public float CrouchSpeedMultiplier { get; set; } = 1f;
 
     [Header("Player Audio")]
     public PlayerAudioController playerAudio;
@@ -157,6 +163,9 @@ public class TopDownPlayerController : MonoBehaviour
 
         Cursor.visible = false;
         Cursor.lockState = CursorLockMode.Confined;
+
+        // ระบบเสริมของผู้เล่น (X-Gear, Eye Wide, เมนู Esc) ติดให้อัตโนมัติ ไม่ต้องแก้ Prefab
+        PlayerSystems.EnsureOn(this);
     }
 
     private void OnDestroy()
@@ -339,7 +348,7 @@ public class TopDownPlayerController : MonoBehaviour
         float currentSpeed = walkSpeed;
 
         if (isCrouching)
-            currentSpeed = crouchSpeed;
+            currentSpeed = crouchSpeed * CrouchSpeedMultiplier;
         else if (isSprinting && !isSprintLocked)
             currentSpeed = sprintSpeed;
 
@@ -501,6 +510,7 @@ public class TopDownPlayerController : MonoBehaviour
             if (!hitThickWall)
             {
                 transform.rotation = Quaternion.LookRotation(vaultDirection);
+                SfxLibrary.Play("vault");
                 StartCoroutine(VaultRoutine(landingSpot));
             }
         }

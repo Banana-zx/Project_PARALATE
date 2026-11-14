@@ -14,6 +14,16 @@ public class GunAction : MonoBehaviour
     public float damage = 10f;
     public float fireRate = 0.1f;
 
+    [Header("Weapon Type")]
+    [Tooltip("ชนิดกระสุนที่ปืนนี้ใช้ (Auto = เดาจากชื่อ: sniper / usp,pistol / อื่นๆ = Rifle)")]
+    public AmmoType ammoType = AmmoType.Auto;
+    [Tooltip("ช่องอาวุธ (Auto = ปืนพกเป็น Secondary, อื่นๆ เป็น Primary)")]
+    public WeaponSlotType slotType = WeaponSlotType.Auto;
+    [Tooltip("ตัวคูณดาเมจเมื่อยิงโดนหัว (0 = ค่าเริ่มต้นตามชนิดปืน: Rifle x2, Pistol x1.5, Sniper x4)")]
+    public float headshotMultiplier = 0f;
+    [Tooltip("ซูมแล้วขึ้นกรอบกล้อง Sniper (ปืนชนิด Sniper ขึ้นให้อัตโนมัติอยู่แล้ว)")]
+    public bool forceScopeOverlay = false;
+
     [Header("Hit Detection")]
     [Tooltip("เลเยอร์ที่กระสุนชนได้ (ค่าเริ่มต้น = ทุกเลเยอร์ยกเว้น Ignore Raycast) " +
              "ถ้ามี Collider ล่องหนที่ขวางกระสุน ให้ย้ายไปเลเยอร์ Ignore Raycast หรือเอาเลเยอร์นั้นออกจากช่องนี้")]
@@ -93,6 +103,59 @@ public class GunAction : MonoBehaviour
     public int CurrentAmmo => currentAmmo;
     public int MagazineSize => magazineSize;
 
+    private AmmoType cachedAmmoType = AmmoType.Auto;
+    private bool lastShotHeadshot;
+
+    public AmmoType ResolvedAmmoType
+    {
+        get
+        {
+            if (ammoType != AmmoType.Auto)
+                return ammoType;
+
+            if (cachedAmmoType == AmmoType.Auto)
+            {
+                string lower = name.ToLowerInvariant();
+                cachedAmmoType = lower.Contains("sniper") ? AmmoType.Sniper
+                    : (lower.Contains("usp") || lower.Contains("pistol")) ? AmmoType.Pistol
+                    : AmmoType.Rifle;
+            }
+
+            return cachedAmmoType;
+        }
+    }
+
+    public WeaponSlotType ResolvedSlot =>
+        slotType != WeaponSlotType.Auto ? slotType
+        : ResolvedAmmoType == AmmoType.Pistol ? WeaponSlotType.Secondary : WeaponSlotType.Primary;
+
+    public string AmmoItemId => ItemCatalog.AmmoId(ResolvedAmmoType);
+    public string UpgradeKey => WeaponUpgrades.KeyOf(ResolvedAmmoType);
+
+    /// <summary>กระสุนสำรองในกระเป๋า (คลังถาวร) ของชนิดที่ปืนนี้ใช้</summary>
+    public int ReserveAmmo => PersistentInventory.Instance != null ? PersistentInventory.Instance.GetAmount(AmmoItemId) : 0;
+
+    public float EffectiveDamage => damage * WeaponUpgrades.DamageMultiplier(UpgradeKey);
+    public float EffectiveReloadDuration => reloadDuration / WeaponUpgrades.ReloadSpeedMultiplier(UpgradeKey);
+
+    public float HeadshotMultiplier
+    {
+        get
+        {
+            if (headshotMultiplier > 0f)
+                return headshotMultiplier;
+
+            switch (ResolvedAmmoType)
+            {
+                case AmmoType.Pistol: return 1.5f;
+                case AmmoType.Sniper: return 4f;
+                default: return 2f;
+            }
+        }
+    }
+
+    public bool UsesScopeOverlay => forceScopeOverlay || ResolvedAmmoType == AmmoType.Sniper;
+
     private Camera mainCam;
 
 
@@ -146,6 +209,7 @@ public class GunAction : MonoBehaviour
 
     private void OnDestroy()
     {
+        PersistentInventory.OnChanged -= UpdateAmmoUI;
         RestoreCinemachineBrainBlend();
 
         if (firstPersonScopeCameraObject != null)
@@ -162,10 +226,15 @@ public class GunAction : MonoBehaviour
         SetCrosshairVisible(held && isScoped && !hideCrosshairWhileScoped);
         OnHeldChanged?.Invoke(held);
 
+        // กระสุนสำรองอยู่ในคลัง: เก็บกล่องกระสุน/คราฟต์แล้วตัวเลขบน HUD ต้องอัปเดตตาม
+        PersistentInventory.OnChanged -= UpdateAmmoUI;
+        if (held)
+            PersistentInventory.OnChanged += UpdateAmmoUI;
+
         if (held)
         {
             UpdateAmmoUI();
-            PlaySound(equipSound, equipVolume);
+            PlaySound(equipSound, equipVolume, "weapon_equip");
         }
 
         if (!held)
@@ -186,6 +255,20 @@ public class GunAction : MonoBehaviour
             nextFireTime = Time.time + fireRate;
             Shoot();
         }
+        else if (isHeld && !isReloading && currentAmmo <= 0 && !IsOwnerLocked() && WasFirePressedThisFrame())
+        {
+            // แม็กว่าง: เสียงไกเปล่า + บอกผู้เล่นว่าต้องทำอะไร
+            SfxLibrary.Play("empty_click");
+            HudToast.Show(ReserveAmmo > 0 ? "Press R to reload" : "Out of " + ItemCatalog.NameOf(AmmoItemId));
+        }
+    }
+
+    private bool WasFirePressedThisFrame()
+    {
+        if (fireAction != null)
+            return fireAction.action.WasPressedThisFrame();
+
+        return resolvedFireAction != null && resolvedFireAction.WasPressedThisFrame();
     }
 
     // ผู้เล่นถูกล็อก (อ่านโน้ต, รัดคอ, ตาย ฯลฯ) ห้ามยิง/เล็ง/รีโหลด
@@ -252,6 +335,14 @@ public class GunAction : MonoBehaviour
         if (!isHeld || isReloading || currentAmmo >= magazineSize)
             return;
 
+        // ไม่มีกระสุนชนิดนี้ในกระเป๋า = รีโหลดไม่ได้
+        if (ReserveAmmo <= 0)
+        {
+            SfxLibrary.Play("empty_click");
+            HudToast.Show("No " + ItemCatalog.NameOf(AmmoItemId));
+            return;
+        }
+
         if (reloadCoroutine != null)
             StopCoroutine(reloadCoroutine);
 
@@ -279,16 +370,21 @@ public class GunAction : MonoBehaviour
         isReloading = true;
         OnReloadStatusChanged?.Invoke(true);
         SetReloadMovementSpeed(true);
-        PlaySound(reloadStartSound, reloadVolume); ;
+        PlaySound(reloadStartSound, reloadVolume, "reload_start");
 
-        yield return new WaitForSeconds(reloadDuration);
+        yield return new WaitForSeconds(EffectiveReloadDuration);
 
-        currentAmmo = magazineSize;
+        // เติมแม็กจากกระสุนในกระเป๋า: ได้เท่าที่มี (อาจไม่เต็มแม็ก)
+        int taken = Mathf.Min(magazineSize - currentAmmo, ReserveAmmo);
+        currentAmmo += taken;
         isReloading = false;
         SetReloadMovementSpeed(false);
         reloadCoroutine = null;
 
-        PlaySound(reloadFinishSound, reloadVolume);
+        if (taken > 0 && PersistentInventory.Instance != null)
+            PersistentInventory.Instance.Add(AmmoItemId, -taken);
+
+        PlaySound(reloadFinishSound, reloadVolume, "reload_finish");
 
         OnReloadStatusChanged?.Invoke(false);
         UpdateAmmoUI();
@@ -308,9 +404,10 @@ public class GunAction : MonoBehaviour
         movementController.SetSprintLocked(reloading);
     }
 
+    // ค่าที่สองคือ "กระสุนสำรองในกระเป๋า" (เดิมเป็นขนาดแม็ก) HUD แสดงเป็น ในแม็ก / สำรอง
     void UpdateAmmoUI()
     {
-        OnAmmoChanged?.Invoke(currentAmmo, magazineSize);
+        OnAmmoChanged?.Invoke(currentAmmo, ReserveAmmo);
     }
     // ฟังก์ชันนี้ใช้จัดการ UI เป้าเล็งและเคอร์เซอร์เมาส์
     void HandleCrosshair()
@@ -404,7 +501,7 @@ public class GunAction : MonoBehaviour
         UpdateAmmoUI();
 
         // เล่นเสียงยิงปืนและปล่อยเสียงให้ AI ได้ยิน
-        PlaySound(fireSound, fireVolume);
+        PlaySound(fireSound, fireVolume, "shot_" + UpgradeKey.ToLowerInvariant());
         PlayerNoiseEmitter noiseEmitter = ResolveNoiseEmitter();
         if (noiseEmitter != null)
             noiseEmitter.EmitShooting(firePoint.position);
@@ -426,7 +523,14 @@ public class GunAction : MonoBehaviour
             // ใช้ GetComponentInParent เหมือนมีด เผื่อ collider อยู่บน child ของศัตรู
             EnemyHealth enemy = hit.collider.GetComponentInParent<EnemyHealth>();
             if (enemy != null)
-                enemy.TakeDamage(damage);
+            {
+                // Headshot: กระสุนผ่าน HeadHitbox ของศัตรูตัวเดียวกัน ตัวคูณต่างกันตามปืน
+                float dealt = EffectiveDamage * (lastShotHeadshot ? HeadshotMultiplier : 1f);
+                enemy.TakeDamage(dealt, lastShotHeadshot);
+
+                if (lastShotHeadshot)
+                    HudToast.Show("HEADSHOT", 0.7f);
+            }
             else if (noiseEmitter != null)
                 noiseEmitter.EmitBulletHitWall(hit.point);
 
@@ -469,9 +573,27 @@ public class GunAction : MonoBehaviour
             }
 
             result = shotHits[i];
+
+            // ลำตัว (Capsule) มักถูกชนก่อนหัว จึงไล่ดูจุดชนถัดไปบนเส้นเดียวกันว่าผ่าน HeadHitbox ของศัตรูตัวนี้ไหม
+            lastShotHeadshot = false;
+            EnemyHealth hitEnemy = collider.GetComponentInParent<EnemyHealth>();
+            if (hitEnemy != null)
+            {
+                for (int j = i; j < count; j++)
+                {
+                    HeadHitbox head = shotHits[j].collider.GetComponent<HeadHitbox>();
+                    if (head != null && head.owner == hitEnemy)
+                    {
+                        lastShotHeadshot = true;
+                        break;
+                    }
+                }
+            }
+
             return true;
         }
 
+        lastShotHeadshot = false;
         result = default;
         return false;
     }
@@ -610,6 +732,13 @@ public class GunAction : MonoBehaviour
         firstPersonScopeCamera.Priority.Value = active ? firstPersonCameraPriority : 0;
         firstPersonScopeCamera.Lens.FieldOfView = scopedFieldOfView;
         SetMovementAimCameraOverride(active);
+
+        // ปืน Sniper: ขึ้นกรอบกล้องเล็งตอนซูม
+        if (UsesScopeOverlay)
+        {
+            ScopeOverlayUI.SetVisible(active);
+            SfxLibrary.Play(active ? "scope_in" : "scope_out");
+        }
 
         if (!active)
         {
@@ -760,8 +889,12 @@ public class GunAction : MonoBehaviour
         laserLine.enabled = false;
     }
 
-    private void PlaySound(AudioClip clip, float volume)
+    // fallbackName: ถ้าปืนไม่ได้ใส่คลิปไว้ใน Inspector จะใช้เสียงจาก SfxLibrary (Resources/Audio/SFX) แทน
+    private void PlaySound(AudioClip clip, float volume, string fallbackName = null)
     {
+        if (clip == null && fallbackName != null)
+            clip = SfxLibrary.Pick(fallbackName);
+
         if (clip == null || audioSource == null)
             return;
 
