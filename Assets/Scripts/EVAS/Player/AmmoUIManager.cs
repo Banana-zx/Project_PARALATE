@@ -55,6 +55,14 @@ public class AmmoUIManager : MonoBehaviour
     }
 
     private string labelOverride;
+    private bool suppressed;
+
+    /// <summary>ซ่อนกล่อง WeaponHUD เดิมถาวร (HUD อาวุธมุมขวาล่างแบบใหม่ของ WeaponWheelUI แสดงแทน)</summary>
+    public void SetSuppressed(bool value)
+    {
+        suppressed = value;
+        RefreshDisplay();
+    }
 
     /// <summary>โชว์ HUD แบบมีแต่ชื่อ (ใช้ตอนถือ X-Gear ที่ไม่ใช่ GameObject อาวุธ) ส่ง null เพื่อปิด</summary>
     public void SetLabelOnly(string label)
@@ -112,9 +120,9 @@ public class AmmoUIManager : MonoBehaviour
     private void RefreshDisplay()
     {
         if (weaponHudPanel != null)
-            weaponHudPanel.SetActive(isWeaponHeld);
+            weaponHudPanel.SetActive(isWeaponHeld && !suppressed);
 
-        if (!isWeaponHeld)
+        if (!isWeaponHeld || suppressed)
             return;
 
         // ชื่อ/ไอคอน โชว์เสมอไม่ว่าอาวุธชนิดไหน

@@ -17,6 +17,8 @@ public class ResourcePickup : MonoBehaviour, IInteractable
             return;
 
         RunInventory.Instance.Add(resourceData, amount);
+        // เสียงเก็บของหลัก (เสียงเดียวกันทั้งเกม) + เสียงแหลมเล็กๆ เดิมของ Scrap / Metal ซ้อนกัน
+        SfxLibrary.PlayPickup();
         AudioManager.PlayPickup(resourceData.pickupSound, transform.position);
         HudToast.Show("+ " + resourceData.resourceName + " x" + amount);
 

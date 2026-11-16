@@ -375,7 +375,7 @@ MonoBehaviour:
   forceScopeOverlay: 0
   hitMask:
     serializedVersion: 2
-    m_Bits: 4294967291
+    m_Bits: 32755
   logShotHits: 0
   magazineSize: 5
   reloadDuration: 4
@@ -392,14 +392,14 @@ MonoBehaviour:
   normalFieldOfView: 50
   scopedFieldOfView: 15
   hideCrosshairWhileScoped: 0
-  scopedMovementSpeedMultiplier: 0.4
+  scopedMovementSpeedMultiplier: 0
   useFirstPersonScope: 1
   firstPersonCameraOffset: {x: 0, y: 1.55, z: 0.15}
   firstPersonCameraPriority: 2000
   snapScopeCameraTransition: 1
   centerCrosshairInFirstPersonScope: 1
   lockCursorInFirstPersonScope: 1
-  firstPersonMouseSensitivity: 0.12
+  firstPersonMouseSensitivity: 0.06
   minFirstPersonPitch: -70
   maxFirstPersonPitch: 70
   fireSound: {fileID: 8300000, guid: aaf59da9c828d39409df3671fbbddcaf, type: 3}

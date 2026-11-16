@@ -1,20 +1,46 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
+/// <summary>
+/// กล้องบุคคลที่สามแบบหมุนอิสระ (ใช้ที่ Base): ตัวละครอยู่กลางจอ ขยับเมาส์เพื่อหมุนกล้องรอบตัวละครได้ทุกทิศ
+/// ตัวละครเดินตามทิศของกล้อง (TopDownPlayerController.useCameraRelativeMovement) กล้องไม่หมุนตามตัวละครอีกแล้ว
+///
+/// หลักการ (Orbit Camera):
+///   1) เก็บมุม yaw / pitch ของกล้องเอง บวกค่าจากเมาส์ทุกเฟรม
+///   2) จุดหมุน (pivot) = ตำแหน่งผู้เล่น + ความสูงระดับไหล่ ไล่ตามผู้เล่นแบบนุ่ม (SmoothDamp)
+///   3) ตำแหน่งกล้อง = pivot ถอยหลังตามมุม yaw/pitch เป็นระยะ distance ถ้ามีกำแพงขวางให้ขยับเข้ามาใกล้
+///   4) เมาส์ถูกล็อกกลางจอระหว่างเดิน และปล่อยเองเมื่อผู้เล่นถูกล็อก (เปิดเมนู / เลือกด่าน / Upgrade)
+/// คลิกขวา (เล็ง) ถูกปิดผ่าน TopDownPlayerController.SetAimBlocked
+/// </summary>
 public class ThirdPersonFollowCamera : MonoBehaviour
 {
     [Header("ผู้เล่นที่จะติดตาม")]
     public Transform player;
 
     [Header("มุมกล้อง (Third Person)")]
-    [Range(0f, 60f)]
+    [Tooltip("มุมก้มเริ่มต้น (องศา) ค่ามาก = กล้องอยู่สูงมองลง")]
+    [Range(-30f, 80f)]
     public float pitch = 20f;
     public float distance = 8f;
     public float heightOffset = 1.6f;
 
+    [Header("หมุนกล้องด้วยเมาส์")]
+    [Tooltip("เปิด = หมุนกล้องอิสระด้วยเมาส์ / ปิด = กล้องหมุนตามหลังตัวละครแบบเดิม")]
+    public bool freeLook = true;
+    [Tooltip("องศาต่อการขยับเมาส์ 1 พิกเซล")]
+    public float mouseSensitivity = 0.12f;
+    [Tooltip("องศาต่อวินาทีเมื่อใช้ก้านขวาของจอย")]
+    public float gamepadSensitivity = 140f;
+    public float minPitch = -15f;
+    public float maxPitch = 65f;
+    public bool invertY = false;
+    [Tooltip("ปิดการเล็ง (คลิกขวา) ขณะใช้กล้องนี้")]
+    public bool blockAiming = true;
+
     [Header("ความนุ่มนวล")]
     public float positionSmoothTime = 0.12f;
 
-    [Header("ความหน่วงของการหมุนตาม (คล้าย Asset Store TPS Camera)")]
+    [Header("ความหน่วงของการหมุนตาม (ใช้เมื่อปิด Free Look)")]
     [Tooltip("ยิ่งค่าน้อย ยิ่งหน่วง/ตามช้า ยิ่งค่ามาก ยิ่งตามไว")]
     public float yawSmoothTime = 0.25f;
 
@@ -22,42 +48,125 @@ public class ThirdPersonFollowCamera : MonoBehaviour
     public LayerMask wallLayer;
     public float minDistance = 2.5f;
     public float skin = 0.2f;
+    [Tooltip("ความเร็วที่กล้องถอยกลับไประยะปกติหลังพ้นกำแพง (เมตร/วินาที) ตอนชนกำแพงจะขยับเข้าทันที")]
+    public float distanceRecoverSpeed = 6f;
 
-    private Vector3 positionVelocity;
+    [Header("โหมด Hub (Base)")]
+    [Tooltip("ตอนใช้กล้องนี้: ปิดพิงกำแพง + กล้อง WallHug, กล้อง Vent, การใช้อาวุธ และแถบ/ลูกกลิ้งเลือกอาวุธ ของ Player")]
+    public bool hubMode = true;
+
+    private TopDownPlayerController controller;
+    private Vector3 pivotVelocity;
+    private Vector3 smoothedPivot;
     private float yawVelocity;
     private float currentYaw;
+    private float currentPitch;
+    private float currentDistance;
+    private bool hadControlLastFrame;
 
     void Start()
     {
-        if (player != null) currentYaw = player.eulerAngles.y;
+        if (player == null)
+            return;
+
+        controller = player.GetComponent<TopDownPlayerController>();
+        currentYaw = player.eulerAngles.y;
+        currentPitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+        currentDistance = distance;
+        smoothedPivot = player.position + Vector3.up * heightOffset;
+
+        ApplyAimBlock(true);
+    }
+
+    void OnEnable()
+    {
+        ApplyAimBlock(true);
+    }
+
+    void OnDisable()
+    {
+        ApplyAimBlock(false);
+    }
+
+    void ApplyAimBlock(bool blocked)
+    {
+        if (controller == null)
+            return;
+
+        controller.SetAimBlocked(this, blocked && blockAiming && freeLook);
+
+        // กล้อง TPS หมุนอิสระ = พื้นที่ Hub: ปิดพิงกำแพง / กล้อง Vent / อาวุธ / แถบเลือกอาวุธ ของ Player
+        controller.SetHubMode(blocked && hubMode && freeLook);
     }
 
     void LateUpdate()
     {
         if (player == null) return;
 
-        // ★ จุดสำคัญ — ค่อยๆ ไล่ตามทิศทางผู้เล่น แทนที่จะอ่านค่าตรงๆ ทุกเฟรม
-        float targetYaw = player.eulerAngles.y;
-        currentYaw = Mathf.SmoothDampAngle(currentYaw, targetYaw, ref yawVelocity, yawSmoothTime);
+        if (freeLook)
+            UpdateFreeLook();
+        else
+            currentYaw = Mathf.SmoothDampAngle(currentYaw, player.eulerAngles.y, ref yawVelocity, yawSmoothTime);
 
-        Vector3 offsetDir = CalculateOffsetDirection(pitch, currentYaw);
-        Vector3 pivotPoint = player.position + Vector3.up * heightOffset;
+        Vector3 targetPivot = player.position + Vector3.up * heightOffset;
+        smoothedPivot = Vector3.SmoothDamp(smoothedPivot, targetPivot, ref pivotVelocity, positionSmoothTime);
 
+        Vector3 offsetDir = CalculateOffsetDirection(currentPitch, currentYaw);
+
+        // กันทะลุกำแพง: ชนแล้วขยับเข้าทันที พ้นแล้วค่อยๆ ถอยกลับ (ไม่กระตุกเวลาหมุนผ่านเสา)
         float safeDist = distance;
-        if (Physics.Raycast(pivotPoint, offsetDir, out RaycastHit hit, distance, wallLayer))
-        {
-            safeDist = Mathf.Max(hit.distance - skin, minDistance);
-        }
+        if (Physics.SphereCast(smoothedPivot, skin, offsetDir, out RaycastHit hit, distance, wallLayer, QueryTriggerInteraction.Ignore))
+            safeDist = Mathf.Max(hit.distance, minDistance);
 
-        Vector3 targetPos = pivotPoint + offsetDir * safeDist;
-        transform.position = Vector3.SmoothDamp(transform.position, targetPos, ref positionVelocity, positionSmoothTime);
+        currentDistance = safeDist < currentDistance
+            ? safeDist
+            : Mathf.MoveTowards(currentDistance, safeDist, distanceRecoverSpeed * Time.deltaTime);
 
-        transform.rotation = Quaternion.LookRotation(pivotPoint - transform.position);
+        transform.position = smoothedPivot + offsetDir * currentDistance;
+        transform.rotation = Quaternion.LookRotation(-offsetDir);
     }
 
-    Vector3 CalculateOffsetDirection(float pitch, float yaw)
+    void UpdateFreeLook()
     {
-        float pitchRad = pitch * Mathf.Deg2Rad;
+        // หมุนได้เฉพาะตอนผู้เล่นคุมตัวละครอยู่ (ไม่ได้เปิดเมนู / เลือกด่าน / Upgrade / Pause)
+        bool hasControl = Time.timeScale > 0f && Application.isFocused &&
+                          (controller == null || !controller.IsMovementLocked);
+
+        if (!hasControl)
+        {
+            hadControlLastFrame = false;
+            return;
+        }
+
+        // ล็อกเมาส์กลางจอ (หน้าต่างอื่นปลดล็อกเองตอนเปิด และเราล็อกกลับเมื่อได้การควบคุมคืน)
+        if (Cursor.lockState != CursorLockMode.Locked)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        // เฟรมแรกหลังได้การควบคุมคืน ข้ามค่าเมาส์ (กันกล้องสะบัดจากระยะที่เมาส์ขยับตอนอยู่ในเมนู)
+        if (!hadControlLastFrame)
+        {
+            hadControlLastFrame = true;
+            return;
+        }
+
+        Vector2 look = Vector2.zero;
+
+        if (Mouse.current != null)
+            look += Mouse.current.delta.ReadValue() * mouseSensitivity;
+
+        if (Gamepad.current != null)
+            look += Gamepad.current.rightStick.ReadValue() * (gamepadSensitivity * Time.deltaTime);
+
+        currentYaw += look.x;
+        currentPitch = Mathf.Clamp(currentPitch + (invertY ? look.y : -look.y), minPitch, maxPitch);
+    }
+
+    Vector3 CalculateOffsetDirection(float pitchAngle, float yaw)
+    {
+        float pitchRad = pitchAngle * Mathf.Deg2Rad;
         float height = Mathf.Sin(pitchRad);
         float horizontal = Mathf.Cos(pitchRad);
 

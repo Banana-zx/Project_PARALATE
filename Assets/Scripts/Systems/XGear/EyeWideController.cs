@@ -14,11 +14,20 @@ public class EyeWideController : MonoBehaviour
     public Key toggleKey = Key.T;
 
     [Header("Camera")]
-    public Vector3 eyeOffset = new Vector3(0f, 1.55f, 0.15f);
+    [Tooltip("ใช้เมื่อโมเดลไม่มีกระดูก Head (ไม่ใช่ Humanoid): ตำแหน่งตาเทียบกับเท้าผู้เล่น")]
+    public Vector3 eyeOffset = new Vector3(0f, 1.4f, 0.18f);
+    [Tooltip("ระยะจากกระดูก Head ไปถึงระดับตา: X = สูงขึ้น, Y = ยื่นไปข้างหน้า (กันเห็นด้านในหัว)")]
+    public Vector2 eyeFromHeadBone = new Vector2(0.06f, 0.18f);
     public int cameraPriority = 1900;
     public float mouseSensitivity = 0.12f;
-    public float minPitch = -70f;
-    public float maxPitch = 70f;
+
+    [Header("Look Limits (องศา)")]
+    [Tooltip("เงยหน้าได้สูงสุดกี่องศาจากแนวราบ")]
+    [Range(0f, 89f)] public float maxLookUp = 70f;
+    [Tooltip("ก้มหน้าได้สูงสุดกี่องศาจากแนวราบ")]
+    [Range(0f, 89f)] public float maxLookDown = 70f;
+    [Tooltip("หันซ้าย/ขวาได้สูงสุดกี่องศา นับจากทิศที่ตัวละครหันอยู่ตอนเข้าโหมด (180 = หมุนได้รอบตัว)")]
+    [Range(0f, 180f)] public float maxLookSide = 180f;
 
     [Header("Zoom")]
     public float defaultFov = 60f;
@@ -27,23 +36,40 @@ public class EyeWideController : MonoBehaviour
     [Tooltip("องศา FOV ที่เปลี่ยนต่อการเลื่อนลูกกลิ้ง 1 คลิก")]
     public float zoomStep = 6f;
     public float zoomSmooth = 12f;
+    [Tooltip("หยุดเลื่อนลูกกลิ้งนานเท่านี้ (วินาที) เสียงซูมจะเริ่มเบาลง")]
+    public float zoomSoundHold = 0.1f;
+    [Tooltip("เวลาที่เสียงซูมใช้เบาลงจนเงียบ (วินาที)")]
+    public float zoomSoundFade = 0.08f;
 
     private TopDownPlayerController controller;
+    private Transform body; // ตัวผู้เล่น (ใช้วัดตำแหน่ง/ทิศ) คอมโพเนนต์นี้อยู่บนวัตถุลูก "EyeWide" ของผู้เล่นได้
     private PickupSystem pickup;
     private WeaponWheelUI wheel;
     private CinemachineCamera eyeCamera;
     private bool active;
     private float yaw;
+    private float baseYaw; // ทิศที่ตัวละครหันอยู่ตอนเข้าโหมด (จุดอ้างอิงของขีดจำกัดซ้าย/ขวา)
     private float pitch;
     private float targetFov;
+    private Vector3 activeEyeOffset;
+    private AudioSource zoomSource;
+    private float lastScrollTime;
+    private int lastZoomDirection;
 
     public bool IsActive => active;
 
     private void Awake()
     {
-        controller = GetComponent<TopDownPlayerController>();
-        pickup = GetComponent<PickupSystem>();
-        wheel = GetComponent<WeaponWheelUI>();
+        // กล้องต้องไม่แย่งจอตั้งแต่เริ่มด่าน (เผื่อ Priority ใน Prefab ถูกตั้งไว้สูง)
+        CinemachineCamera own = GetComponent<CinemachineCamera>();
+        if (own != null)
+            own.Priority.Value = 0;
+
+        // หาจากตัวเองขึ้นไปหาพ่อ: วางคอมโพเนนต์นี้บนวัตถุลูกของ Player (เช่น "EyeWide") แล้วปรับค่าใน Inspector ได้
+        controller = GetComponentInParent<TopDownPlayerController>();
+        pickup = GetComponentInParent<PickupSystem>();
+        wheel = GetComponentInParent<WeaponWheelUI>();
+        body = controller != null ? controller.transform : transform;
     }
 
     private void Update()
@@ -87,10 +113,12 @@ public class EyeWideController : MonoBehaviour
         EnsureCamera();
 
         active = true;
-        yaw = transform.eulerAngles.y;
+        baseYaw = body.eulerAngles.y;
+        yaw = baseYaw;
         pitch = 0f;
         targetFov = defaultFov;
         eyeCamera.Lens.FieldOfView = defaultFov;
+        activeEyeOffset = ResolveEyeOffset();
         UpdateCameraPose();
 
         eyeCamera.Priority.Value = cameraPriority;
@@ -113,6 +141,9 @@ public class EyeWideController : MonoBehaviour
         if (eyeCamera != null)
             eyeCamera.Priority.Value = 0;
 
+        if (zoomSource != null)
+            zoomSource.Stop();
+
         if (controller != null)
             controller.SetMovementLocked(this, false);
 
@@ -131,7 +162,13 @@ public class EyeWideController : MonoBehaviour
         float zoomFactor = Mathf.Clamp(eyeCamera.Lens.FieldOfView / defaultFov, 0.2f, 1.25f);
 
         yaw += delta.x * mouseSensitivity * zoomFactor;
-        pitch = Mathf.Clamp(pitch - delta.y * mouseSensitivity * zoomFactor, minPitch, maxPitch);
+
+        // จำกัดมุมหันซ้าย/ขวา: คิดเป็น "ส่วนต่างจากทิศตอนเข้าโหมด" แล้วค่อยหนีบ (DeltaAngle กันปัญหาข้าม 0/360)
+        if (maxLookSide < 179.9f)
+            yaw = baseYaw + Mathf.Clamp(Mathf.DeltaAngle(baseYaw, yaw), -maxLookSide, maxLookSide);
+
+        // pitch เป็นบวก = ก้ม, ลบ = เงย (ตามแกน X ของ Unity)
+        pitch = Mathf.Clamp(pitch - delta.y * mouseSensitivity * zoomFactor, -maxLookUp, maxLookDown);
 
         UpdateCameraPose();
     }
@@ -147,17 +184,70 @@ public class EyeWideController : MonoBehaviour
 
             // เสียงกล้องซูม: เล่นเฉพาะเมื่อซูมได้จริง (ไม่ดังตอนสุดระยะ)
             if (!Mathf.Approximately(previous, targetFov))
-                SfxLibrary.Play(scroll > 0f ? "zoom_in" : "zoom_out");
+                PlayZoomSound(scroll > 0f ? 1 : -1);
         }
 
         eyeCamera.Lens.FieldOfView = Mathf.Lerp(eyeCamera.Lens.FieldOfView, targetFov, zoomSmooth * Time.unscaledDeltaTime);
+        UpdateZoomSound();
+    }
+
+    // เสียงซูมใช้ AudioSource ของตัวเอง (ไม่ใช้ PlayOneShot) เพื่อ "ตัดเสียงได้" ทันทีที่หยุดเลื่อนลูกกลิ้ง
+    // คลิปเสียงยาวกว่าการซูม 1 คลิก ถ้าปล่อยเล่นจนจบจะได้ยินเสียงค้างหลังหยุดซูม
+    private void PlayZoomSound(int direction)
+    {
+        lastScrollTime = Time.unscaledTime;
+
+        // ยังดังอยู่และซูมทิศเดิม: ปล่อยให้เล่นต่อ (ไม่เริ่มคลิปใหม่ซ้อนทุกคลิก)
+        if (zoomSource.isPlaying && direction == lastZoomDirection)
+        {
+            zoomSource.volume = SfxLibrary.GainOf(zoomSource.clip);
+            return;
+        }
+
+        AudioClip clip = SfxLibrary.Pick(direction > 0 ? "zoom_in" : "zoom_out");
+        if (clip == null)
+            return;
+
+        lastZoomDirection = direction;
+        zoomSource.clip = clip;
+        zoomSource.volume = SfxLibrary.GainOf(clip);
+        zoomSource.Play();
+    }
+
+    private void UpdateZoomSound()
+    {
+        if (zoomSource == null || !zoomSource.isPlaying)
+            return;
+
+        if (Time.unscaledTime - lastScrollTime < zoomSoundHold)
+            return;
+
+        // เบาลงเร็วๆ แทนการตัดฉับ (ตัดฉับจะได้ยินเสียง "ป๊อก")
+        zoomSource.volume = Mathf.MoveTowards(zoomSource.volume, 0f, Time.unscaledDeltaTime / Mathf.Max(0.01f, zoomSoundFade));
+        if (zoomSource.volume <= 0f)
+            zoomSource.Stop();
+    }
+
+    // ระดับตา = กระดูก Head ของโมเดล (วัดครั้งเดียวตอนเข้าโหมด กล้องจึงไม่สั่นตามแอนิเมชัน)
+    private Vector3 ResolveEyeOffset()
+    {
+        Animator animator = controller != null ? controller.animator : null;
+        if (animator == null)
+            animator = body.GetComponentInChildren<Animator>();
+
+        Transform head = animator != null && animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
+        if (head == null)
+            return eyeOffset;
+
+        float headHeight = head.position.y - body.position.y;
+        return new Vector3(0f, headHeight + eyeFromHeadBone.x, eyeFromHeadBone.y);
     }
 
     private void UpdateCameraPose()
     {
         Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
         Quaternion yawOnly = Quaternion.Euler(0f, yaw, 0f);
-        eyeCamera.transform.SetPositionAndRotation(transform.position + yawOnly * eyeOffset, rotation);
+        eyeCamera.transform.SetPositionAndRotation(body.position + yawOnly * activeEyeOffset, rotation);
     }
 
     private void EnsureCamera()
@@ -165,12 +255,31 @@ public class EyeWideController : MonoBehaviour
         if (eyeCamera != null)
             return;
 
-        GameObject go = new GameObject("EyeWideCamera");
-        go.transform.SetParent(transform, false);
-        eyeCamera = go.AddComponent<CinemachineCamera>();
+        // ปกติคอมโพเนนต์นี้อยู่บนวัตถุลูก "EyeWide" ของผู้เล่น → ใช้วัตถุนั้นเป็นกล้องเลย (ไม่สร้างวัตถุเพิ่ม)
+        // ถ้ามีคนติดไว้บนตัว Player ตรงๆ จะขยับ Transform ของ Player ไม่ได้ จึงค่อยสร้างวัตถุลูกแยก
+        GameObject go = gameObject;
+        if (transform == body)
+        {
+            go = new GameObject("EyeWideCamera");
+            go.transform.SetParent(transform, false);
+        }
+
+        // วัตถุ EyeWide เป็นกล้อง (CinemachineCamera) ในตัว: ถ้าใน Prefab มีอยู่แล้วใช้ตัวนั้น (ค่า Lens อื่นๆ ปรับใน Inspector ได้)
+        eyeCamera = go.GetComponent<CinemachineCamera>();
+        if (eyeCamera == null)
+        {
+            eyeCamera = go.AddComponent<CinemachineCamera>();
+            eyeCamera.Lens.NearClipPlane = 0.05f;
+        }
+
         eyeCamera.Priority.Value = 0;
         eyeCamera.Lens.FieldOfView = defaultFov;
-        eyeCamera.Lens.NearClipPlane = 0.05f;
+
+        zoomSource = go.AddComponent<AudioSource>();
+        zoomSource.playOnAwake = false;
+        zoomSource.loop = false;
+        zoomSource.spatialBlend = 0f;
+        AudioManager.RouteToSfx(zoomSource);
     }
 
     private void OnDisable()

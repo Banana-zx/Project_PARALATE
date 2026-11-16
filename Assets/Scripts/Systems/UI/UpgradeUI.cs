@@ -6,15 +6,16 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// หน้าต่าง Upgrade Corner (สร้างด้วยโค้ด) 3 แท็บ:
+/// หน้าต่าง Upgrade Corner (สร้างด้วยโค้ด) 4 แท็บ:
 ///   Weapon : อัปเกรดอาวุธด้วย Scrap (แสดงต้นทุน, ผลที่ได้, ปุ่ม Upgrade)
+///   Loadout: ช่อง Primary / Secondary (กดแล้วมี Panel ให้เลือกอาวุธที่ใส่ได้ตอนนี้) และ X-Gear (กดแล้วไปแท็บ X Gear)
 ///   X Gear : 3 ช่อง Passive / Active / Map กดวงกลมแล้วมี Panel เล็กด้านขวาให้เลือก Data ใส่
 ///   Craft  : คราฟต์กระสุนจาก Scrap / Metal
 /// ใช้ของจาก PersistentInventory (ของที่เก็บจากด่านและจบด่านสำเร็จแล้ว)
 /// </summary>
 public class UpgradeUI : MonoBehaviour
 {
-    private enum Tab { Weapon, XGear, Craft }
+    private enum Tab { Weapon, Loadout, XGear, Craft }
 
     private static UpgradeUI instance;
 
@@ -23,14 +24,18 @@ public class UpgradeUI : MonoBehaviour
     private static readonly Color Red = new Color(1f, 0.35f, 0.35f, 1f);
 
     private Tab currentTab = Tab.Weapon;
-    private readonly Button[] tabButtons = new Button[3];
+    private readonly Button[] tabButtons = new Button[4];
     private RectTransform content;
     private RectTransform picker;
     private TextMeshProUGUI resourceLabel;
     private TopDownPlayerController lockedPlayer;
     private ItemCategory? pickerSlot;
+    private HeldSlot? loadoutPickerSlot;
+    private PickupSystem pickup;
+    private Transform showcaseTarget;
 
-    public static void Open()
+    /// <param name="showcaseTarget">โมเดลของคนอัปเกรด (กล้องจะหันไปหา) ถ้าเว้นว่าง กล้องจะโชว์ตัวผู้เล่นแทน</param>
+    public static void Open(Transform showcaseTarget = null)
     {
         if (instance == null)
         {
@@ -39,6 +44,7 @@ public class UpgradeUI : MonoBehaviour
             instance.Build();
         }
 
+        instance.showcaseTarget = showcaseTarget;
         instance.Show();
     }
 
@@ -46,6 +52,8 @@ public class UpgradeUI : MonoBehaviour
     {
         if (instance == this)
             instance = null;
+
+        UpgradeShowcaseCamera.Hide();
 
         PersistentInventory.OnChanged -= Refresh;
     }
@@ -67,6 +75,11 @@ public class UpgradeUI : MonoBehaviour
         if (lockedPlayer != null)
             lockedPlayer.SetMovementLocked(this, true);
 
+        pickup = lockedPlayer != null ? lockedPlayer.GetComponent<PickupSystem>() : null;
+
+        // กล้องเลื่อนไปหาคนอัปเกรด (หรือตัวผู้เล่นถ้าไม่มี) ให้อยู่ครึ่งขวาของจอ
+        UpgradeShowcaseCamera.Show(lockedPlayer, showcaseTarget);
+
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
 
@@ -81,6 +94,7 @@ public class UpgradeUI : MonoBehaviour
     {
         PersistentInventory.OnChanged -= Refresh;
         gameObject.SetActive(false);
+        UpgradeShowcaseCamera.Hide();
 
         if (lockedPlayer != null)
             lockedPlayer.SetMovementLocked(this, false);
@@ -98,24 +112,23 @@ public class UpgradeUI : MonoBehaviour
 
     private void Build()
     {
-        Image dim = UIBuilder.Panel("Dim", transform, UIBuilder.DimColor);
-        UIBuilder.Stretch(dim.rectTransform);
-
-        // หน้าต่างหลัก (ซ้าย) + ตัวละคร (ขวา) + ปุ่ม X มุมขวาบน ตามภาพร่าง
+        // หน้าต่างกินครึ่งซ้ายของจอ ครึ่งขวาเว้นว่างให้เห็นตัวละครจริงในฉาก (UpgradeShowcaseCamera จัดมุมกล้องให้)
+        // ไม่มีฉากมืดทับทั้งจอ และไม่มี Panel รูปตัวละครแล้ว
         Image window = UIBuilder.Panel("Window", transform, UIBuilder.WindowColor);
-        UIBuilder.Place(window.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-190f, 0f), new Vector2(1000f, 700f));
+        UIBuilder.Place(window.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(50f, 0f), new Vector2(1060f, 940f));
 
+        // แถบแท็บเว้นที่มุมขวาบนไว้ให้ปุ่ม X
         RectTransform tabs = UIBuilder.Rect("Tabs", window.transform);
         tabs.anchorMin = new Vector2(0f, 1f);
         tabs.anchorMax = new Vector2(1f, 1f);
         tabs.pivot = new Vector2(0.5f, 1f);
-        tabs.anchoredPosition = Vector2.zero;
-        tabs.sizeDelta = new Vector2(0f, 76f);
+        tabs.anchoredPosition = new Vector2(-40f, 0f);
+        tabs.sizeDelta = new Vector2(-80f, 76f);
         HorizontalLayoutGroup tabRow = UIBuilder.Horizontal(tabs, 4f, 0);
         tabRow.childForceExpandWidth = true;
         tabRow.childForceExpandHeight = true;
 
-        string[] names = { "Weapon", "X Gear", "Craft" };
+        string[] names = { "Weapon", "Loadout", "X Gear", "Craft" };
         for (int i = 0; i < names.Length; i++)
         {
             Tab tab = (Tab)i;
@@ -128,15 +141,10 @@ public class UpgradeUI : MonoBehaviour
 
         resourceLabel = UIBuilder.Text("Resources", window.transform, string.Empty, 26f, TextAlignmentOptions.BottomRight);
         resourceLabel.richText = true;
-        UIBuilder.Stretch(resourceLabel.rectTransform, 28f, 18f, 28f, 640f);
+        UIBuilder.Stretch(resourceLabel.rectTransform, 28f, 18f, 28f, 880f);
 
-        // ตัวละครประจำมุมอัปเกรด
-        Image npc = UIBuilder.Panel("Character", transform, UIBuilder.WindowColor, false);
-        UIBuilder.Place(npc.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(500f, 0f), new Vector2(340f, 700f));
-        UIPortrait.Build(npc.transform, "UI/upgrade_character");
-
-        Button close = UIBuilder.Button("Close", transform, "X", Close, 34f, new Color(0.8f, 0.15f, 0.15f, 0.9f));
-        UIBuilder.Place((RectTransform)close.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(722f, 384f), new Vector2(60f, 60f));
+        Button close = UIBuilder.Button("Close", window.transform, "X", Close, 34f, new Color(0.8f, 0.15f, 0.15f, 0.9f));
+        UIBuilder.Place((RectTransform)close.transform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-8f, -8f), new Vector2(60f, 60f));
 
         // Panel เล็กสำหรับเลือก Data ใส่ X-Gear (ซ้อนอยู่ด้านขวาของหน้าต่าง)
         Image pickerImage = UIBuilder.Panel("DataPicker", window.transform, new Color(0.12f, 0.14f, 0.18f, 1f));
@@ -150,6 +158,7 @@ public class UpgradeUI : MonoBehaviour
     {
         currentTab = tab;
         pickerSlot = null;
+        loadoutPickerSlot = null;
 
         for (int i = 0; i < tabButtons.Length; i++)
             tabButtons[i].targetGraphic.color = i == (int)tab ? UIBuilder.AccentColor : UIBuilder.ButtonColor;
@@ -167,6 +176,7 @@ public class UpgradeUI : MonoBehaviour
         switch (currentTab)
         {
             case Tab.Weapon: BuildWeaponTab(); break;
+            case Tab.Loadout: BuildLoadoutTab(); break;
             case Tab.XGear: BuildXGearTab(); break;
             case Tab.Craft: BuildCraftTab(); break;
         }
@@ -269,6 +279,136 @@ public class UpgradeUI : MonoBehaviour
         }
     }
 
+    // ------------------------------------------------------------ Loadout
+
+    private void BuildLoadoutTab()
+    {
+        AddLoadoutWeaponRow("Primary", HeldSlot.Primary, "No primary weapon");
+        AddLoadoutWeaponRow("Secondary", HeldSlot.Secondary, "No secondary weapon");
+
+        // X-Gear: สรุปของที่ใส่อยู่ กดแล้วไปแท็บ X Gear (ที่เดียวที่ใช้เปลี่ยน Data)
+        string gear = $"<b>X-Gear</b>\n<size=20>Passive: {GearName(XGearLoadout.PassiveId)}\n" +
+                      $"Active: {GearName(XGearLoadout.ActiveId)}\nMap: {GearName(XGearLoadout.MapId)}</size>";
+
+        AddRow("X-GEAR", "X-Gear", UIBuilder.AccentColor, gear, UIBuilder.TextColor,
+            "open", () => SelectTab(Tab.XGear), true, () => SelectTab(Tab.XGear));
+    }
+
+    private static string GearName(string id) => string.IsNullOrEmpty(id) ? "-" : ItemCatalog.NameOf(id);
+
+    private void AddLoadoutWeaponRow(string label, HeldSlot slot, string emptyText)
+    {
+        GameObject item = pickup != null ? pickup.GetItem(slot) : null;
+        int choices = CountStash(slot);
+
+        string body = item != null
+            ? $"<b>{PickupSystem.DisplayNameOf(item)}</b>\n<size=18>{PickupSystem.DescribeWeapon(item)}</size>"
+            : $"{emptyText}\n<size=18><color=#FFFFFF88>{choices} weapon(s) available</color></size>";
+
+        System.Action toggle = () =>
+        {
+            // กดช่อง: เปิด/ปิด Panel เลือกอาวุธของช่องนี้
+            loadoutPickerSlot = loadoutPickerSlot == slot ? (HeldSlot?)null : slot;
+            RefreshPicker();
+        };
+
+        Sprite icon = null;
+        if (item != null)
+        {
+            WeaponInfo info = item.GetComponent<WeaponInfo>();
+            icon = info != null ? info.Icon : null;
+        }
+
+        AddRow(label, label, UIBuilder.MutedText, body, item != null ? UIBuilder.TextColor : Red,
+            "change", toggle, true, toggle, icon);
+    }
+
+    private static HeldSlot SlotOf(GameObject weapon)
+    {
+        return PickupSystem.SlotTypeOf(weapon) == WeaponSlotType.Primary ? HeldSlot.Primary : HeldSlot.Secondary;
+    }
+
+    private int CountStash(HeldSlot slot)
+    {
+        if (pickup == null)
+            return 0;
+
+        int count = 0;
+        IReadOnlyList<GameObject> stash = pickup.Stash;
+        for (int i = 0; i < stash.Count; i++)
+        {
+            if (stash[i] != null && SlotOf(stash[i]) == slot)
+                count++;
+        }
+
+        return count;
+    }
+
+    // Panel เลือกอาวุธ: แสดง "อาวุธที่ใส่ช่องนี้ได้ตอนนี้" = อาวุธชนิดเดียวกับช่อง ที่ผู้เล่นมีอยู่ใน Inventory (Stash)
+    private void BuildLoadoutPicker(HeldSlot slot)
+    {
+        TextMeshProUGUI title = UIBuilder.Text("Title", picker, slot == HeldSlot.Primary ? "Primary weapon" : "Secondary weapon",
+            24f, TextAlignmentOptions.Center);
+        UIBuilder.Size(title, -1f, 40f);
+
+        int count = 0;
+
+        if (pickup != null)
+        {
+            // คัดลอกก่อนวน เพราะการกดใส่จะแก้ Stash
+            List<GameObject> options = new List<GameObject>(pickup.Stash);
+            for (int i = 0; i < options.Count; i++)
+            {
+                GameObject weapon = options[i];
+                if (weapon == null || SlotOf(weapon) != slot)
+                    continue;
+
+                count++;
+                Button button = UIBuilder.Button("Weapon", picker, PickupSystem.DisplayNameOf(weapon), () =>
+                {
+                    if (pickup.EquipFromStash(weapon, true))
+                    {
+                        loadoutPickerSlot = null;
+                        Refresh();
+                    }
+                    else
+                    {
+                        SfxLibrary.PlayUI("ui_error");
+                    }
+                }, 20f);
+                UIBuilder.Size(button, -1f, 56f);
+            }
+        }
+
+        if (count == 0)
+        {
+            TextMeshProUGUI empty = UIBuilder.Text("Empty", picker,
+                "No other weapon for this slot.\nWeapons you pick up go here when the slot is full.", 20f,
+                TextAlignmentOptions.Center, UIBuilder.MutedText);
+            UIBuilder.Size(empty, -1f, 110f);
+        }
+
+        if (pickup != null && pickup.GetItem(slot) != null)
+        {
+            Button remove = UIBuilder.Button("Remove", picker, "Unequip (to inventory)", () =>
+            {
+                if (pickup.UnequipToInventory(slot, true))
+                {
+                    loadoutPickerSlot = null;
+                    Refresh();
+                }
+            }, 20f, new Color(0.8f, 0.2f, 0.2f, 0.5f));
+            UIBuilder.Size(remove, -1f, 56f);
+        }
+
+        Button cancel = UIBuilder.Button("Cancel", picker, "Close", () =>
+        {
+            loadoutPickerSlot = null;
+            RefreshPicker();
+        }, 20f);
+        UIBuilder.Size(cancel, -1f, 48f);
+    }
+
     // ------------------------------------------------------------ X Gear
 
     private static readonly ItemCategory[] GearSlots = { ItemCategory.PassiveChip, ItemCategory.ActiveChip, ItemCategory.MapData };
@@ -301,6 +441,14 @@ public class UpgradeUI : MonoBehaviour
 
     private void RefreshPicker()
     {
+        if (currentTab == Tab.Loadout && loadoutPickerSlot.HasValue)
+        {
+            picker.gameObject.SetActive(true);
+            UIBuilder.Clear(picker);
+            BuildLoadoutPicker(loadoutPickerSlot.Value);
+            return;
+        }
+
         bool show = currentTab == Tab.XGear && pickerSlot.HasValue;
         picker.gameObject.SetActive(show);
 

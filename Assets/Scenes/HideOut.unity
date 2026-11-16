@@ -77025,6 +77025,10 @@ PrefabInstance:
       propertyPath: m_ActionEvents.Array.data[19].m_ActionName
       value: 'Player/CameraLook[/Mouse/delta]'
       objectReference: {fileID: 0}
+    - target: {fileID: 8204272364737796715, guid: 5bd147dbcd2df744d91cb0a813ec2645, type: 3}
+      propertyPath: maxLookSide
+      value: 65
+      objectReference: {fileID: 0}
     - target: {fileID: 8404243857973046065, guid: 5bd147dbcd2df744d91cb0a813ec2645, type: 3}
       propertyPath: m_LocalPosition.x
       value: 98.7
@@ -125685,6 +125689,14 @@ PrefabInstance:
     - target: {fileID: 2648573681215363720, guid: d589477769acd3b42860b6f05029e293, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3439542103654195770, guid: d589477769acd3b42860b6f05029e293, type: 3}
+      propertyPath: hitMask.m_Bits
+      value: 32755
+      objectReference: {fileID: 0}
+    - target: {fileID: 3439542103654195770, guid: d589477769acd3b42860b6f05029e293, type: 3}
+      propertyPath: firstPersonMouseSensitivity
+      value: 0.06
       objectReference: {fileID: 0}
     - target: {fileID: 7950042793085795323, guid: d589477769acd3b42860b6f05029e293, type: 3}
       propertyPath: m_Name

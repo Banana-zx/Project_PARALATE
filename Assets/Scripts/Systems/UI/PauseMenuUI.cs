@@ -32,6 +32,9 @@ public class PauseMenuUI : MonoBehaviour
     private bool lockedLastFrame;
     private float timeScaleBeforePause = 1f;
 
+    [Tooltip("ปุ่มลัดเปิดเมนูที่หน้า Inventory ทันที")]
+    public Key inventoryHotkey = Key.B;
+
     public bool IsOpen => isOpen;
 
     public static void EnsureInScene(TopDownPlayerController player)
@@ -64,13 +67,19 @@ public class PauseMenuUI : MonoBehaviour
     {
         Keyboard keyboard = Keyboard.current;
         bool escape = keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+        bool inventoryKey = keyboard != null && keyboard[inventoryHotkey].wasPressedThisFrame;
 
-        if (!escape)
+        if (!escape && !inventoryKey)
             return;
 
         if (isOpen)
         {
-            Close();
+            // B ตอนเมนูเปิดอยู่หน้าอื่น = สลับไปหน้า Inventory / กดซ้ำที่หน้า Inventory = ปิด
+            if (inventoryKey && currentPage != Page.Inventory)
+                SelectPage(Page.Inventory);
+            else
+                Close();
+
             return;
         }
 
@@ -82,7 +91,7 @@ public class PauseMenuUI : MonoBehaviour
         if (LevelManager.IsTransitionRunning)
             return;
 
-        Open();
+        Open(inventoryKey ? Page.Inventory : Page.Equipment);
     }
 
     private void LateUpdate()
@@ -91,6 +100,11 @@ public class PauseMenuUI : MonoBehaviour
     }
 
     public void Open()
+    {
+        Open(Page.Equipment);
+    }
+
+    private void Open(Page page)
     {
         if (isOpen)
             return;
@@ -107,7 +121,7 @@ public class PauseMenuUI : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
 
         SfxLibrary.PlayUI("menu_open");
-        SelectPage(Page.Equipment);
+        SelectPage(page);
     }
 
     public void Close()
@@ -185,7 +199,7 @@ public class PauseMenuUI : MonoBehaviour
             UIBuilder.Size(navButtons[i], -1f, 70f);
         }
 
-        TextMeshProUGUI hint = UIBuilder.Text("Hint", nav.transform, "Esc to resume", 18f, TextAlignmentOptions.Bottom, UIBuilder.MutedText);
+        TextMeshProUGUI hint = UIBuilder.Text("Hint", nav.transform, "Esc to resume  •  B inventory", 18f, TextAlignmentOptions.Bottom, UIBuilder.MutedText);
         UIBuilder.Stretch(hint.rectTransform, 0f, 16f, 0f, 0f);
 
         // กล่องอธิบาย (Tooltip) สี่เหลี่ยมเล็กด้านขวาของเนื้อหา
@@ -313,7 +327,7 @@ public class PauseMenuUI : MonoBehaviour
         {
             relay.onRightClick = () =>
             {
-                if (pickup.UnequipToInventory(slot))
+                if (pickup.UnequipToInventory(slot, true))
                 {
                     HudToast.Show(itemName + " moved to Inventory");
                     Rebuild();
@@ -357,9 +371,24 @@ public class PauseMenuUI : MonoBehaviour
                     PickupSystem.DescribeWeapon(weapon) + "\n\nLeft click to equip.",
                     () =>
                     {
-                        if (pickup.EquipFromStash(weapon))
+                        if (pickup.EquipFromStash(weapon, true))
                             Rebuild();
                     });
+                used++;
+            }
+        }
+
+        // 1.5) Keycard ที่เก็บได้ในด่านนี้ (ใช้แล้วไม่หมด บัตรระดับสูงเปิดประตูระดับต่ำกว่าได้ด้วย)
+        PlayerKeycards keycards = PlayerKeycards.Instance;
+        if (keycards != null)
+        {
+            IReadOnlyList<int> levels = keycards.OwnedLevels;
+            for (int i = 0; i < levels.Count && used < GridColumns * GridRows; i++)
+            {
+                int level = levels[i];
+                AddCell(grid, "Lv." + level, "KEY", new Color(1f, 0.85f, 0.3f), null, "Keycard Lv." + level,
+                    $"Opens doors that need Keycard Lv.{level} or lower.\nNot used up when opening a door.\n\nKept for this mission only.",
+                    null);
                 used++;
             }
         }
@@ -469,6 +498,17 @@ public class PauseMenuUI : MonoBehaviour
             UIBuilder.LabelOf(check).text = value ? "X" : string.Empty;
         }, 26f, new Color(1f, 1f, 1f, 0.18f));
         UIBuilder.Place((RectTransform)check.transform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(240f, -90f), new Vector2(44f, 44f));
+
+        // Graphics: กดเพื่อวนระดับ (High Fidelity → Balanced → Performant) ระดับต่ำ = เฟรมเรตสูงขึ้น
+        TextMeshProUGUI graphicsLabel = UIBuilder.Text("GraphicsLabel", content, "Graphics", 26f);
+        UIBuilder.Place(graphicsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -430f), new Vector2(220f, 44f));
+
+        Button quality = null;
+        quality = UIBuilder.Button("GraphicsQuality", content, GraphicsQuality.CurrentName, () =>
+        {
+            UIBuilder.LabelOf(quality).text = GraphicsQuality.Cycle();
+        }, 24f, new Color(1f, 1f, 1f, 0.18f));
+        UIBuilder.Place((RectTransform)quality.transform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(180f, -430f), new Vector2(380f, 44f));
 
         TextMeshProUGUI soundHeader = UIBuilder.Text("SoundHeader", content, "Sound", 26f);
         UIBuilder.Place(soundHeader.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -170f), new Vector2(220f, 44f));

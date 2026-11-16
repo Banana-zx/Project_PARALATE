@@ -255,7 +255,6 @@ public static class ParalateSetup
     ///    → ลบตัวที่เพิ่มใน Scene, คืนช่อง wallHug ให้ชี้ตัวของ prefab, ใช้ค่ากล้องพิงกำแพงชุดเดียวกับ Simulation 1
     ///    → ปิด WallHugCam ตัวเก่าที่วางแยกใน Scene (ใช้ตัวที่อยู่ใน prefab แทน)
     /// 2) override ที่ชี้ไปคอมโพเนนต์ซึ่งไม่มีใน prefab แล้ว → ลบทิ้ง
-    /// 3) กลุ่ม Kill&Mercy ใน HUD ถูกปิดไว้ → เปิด (KnockoutPromptUI ซ่อนป้าย/หลอดเองตอนเริ่ม)
     /// รันซ้ำได้: ถ้าไม่มีอะไรค้างจะไม่แตะ Scene
     /// </summary>
     private static void SyncHideOutWithPrefabs()
@@ -335,16 +334,7 @@ public static class ParalateSetup
             }
         }
 
-        // Kill&Mercy
-        foreach (Transform candidate in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-        {
-            if (candidate.name == "Kill&Mercy" && !candidate.gameObject.activeSelf)
-            {
-                candidate.gameObject.SetActive(true);
-                Debug.Log("[ParalateSetup] HideOut: enabled Kill&Mercy");
-                changed = true;
-            }
-        }
+        // กลุ่ม Kill&Mercy: ไม่แตะที่นี่แล้ว KnockoutPromptUI เปิดชุดที่ใช้และปิดชุดซ้ำเองตอนเริ่ม Scene
 
         if (!changed)
             return;

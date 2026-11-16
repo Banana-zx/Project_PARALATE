@@ -435,7 +435,9 @@ public class GunAction : MonoBehaviour
     {
         ResolveAimAction();
 
-        bool shouldScope = enableScope && isHeld && !IsOwnerLocked() && resolvedAimAction != null && resolvedAimAction.IsPressed();
+        // CanAim = false ตอนพิงกำแพง: คลิกขวาไม่ทำอะไร (ไม่ซูม ไม่หันตามเมาส์)
+        bool canAim = movementController == null || movementController.CanAim;
+        bool shouldScope = enableScope && isHeld && canAim && !IsOwnerLocked() && resolvedAimAction != null && resolvedAimAction.IsPressed();
         SetScoped(shouldScope, false);
     }
     // ฟังก์ชันนี้ใช้เพื่อหาค่า InputAction ของการเล็ง (Scope) จาก InputActionReference หรือจาก PlayerInput
@@ -527,9 +529,6 @@ public class GunAction : MonoBehaviour
                 // Headshot: กระสุนผ่าน HeadHitbox ของศัตรูตัวเดียวกัน ตัวคูณต่างกันตามปืน
                 float dealt = EffectiveDamage * (lastShotHeadshot ? HeadshotMultiplier : 1f);
                 enemy.TakeDamage(dealt, lastShotHeadshot);
-
-                if (lastShotHeadshot)
-                    HudToast.Show("HEADSHOT", 0.7f);
             }
             else if (noiseEmitter != null)
                 noiseEmitter.EmitBulletHitWall(hit.point);
@@ -903,6 +902,6 @@ public class GunAction : MonoBehaviour
         else
             audioSource.pitch = 1f;
 
-        audioSource.PlayOneShot(clip, volume);
+        audioSource.PlayOneShot(clip, volume * SfxLibrary.GainOf(clip));
     }
 }

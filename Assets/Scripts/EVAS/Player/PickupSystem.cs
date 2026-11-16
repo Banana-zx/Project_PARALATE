@@ -53,10 +53,33 @@ public class PickupSystem : MonoBehaviour
     public bool HasKnifeEquipped => HeldItem != null && HeldItem.GetComponent<KnifeAction>() != null;
     public IReadOnlyList<GameObject> Stash => stash;
 
-    /// <summary>เปลี่ยนอาวุธได้หรือไม่ (ห้ามตอนถูกล็อก/กำลังรัดคอ)</summary>
+    /// <summary>ห้ามถืออาวุธทุกชนิด (โหมด Hub ใน Base): ถือได้แค่มือเปล่า</summary>
+    public bool WeaponsBlocked { get; private set; }
+
+    public void SetWeaponsBlocked(bool blocked)
+    {
+        if (WeaponsBlocked == blocked)
+            return;
+
+        // เก็บอาวุธที่ถืออยู่ก่อน แล้วค่อยตั้งธง (Select เช็กธงนี้)
+        if (blocked)
+            Select(HeldSlot.Unarmed);
+
+        WeaponsBlocked = blocked;
+        OnLoadoutChanged?.Invoke();
+    }
+
+    /// <summary>เปลี่ยนอาวุธได้หรือไม่ (ห้ามตอนถูกล็อก/กำลังรัดคอ/โหมด Hub)</summary>
     public bool CanChangeWeapon =>
+        !WeaponsBlocked &&
         (movementController == null || !movementController.IsMovementLocked) &&
         (knockoutSystem == null || !knockoutSystem.IsKnockout);
+
+    // จากเมนู: ห้ามแค่ตอนกำลังรัดคอ / ตอนเล่นปกติ: ใช้กติกาเต็มของ CanChangeWeapon
+    private bool CanChangeFrom(bool fromMenu)
+    {
+        return fromMenu ? (knockoutSystem == null || !knockoutSystem.IsKnockout) : CanChangeWeapon;
+    }
 
     void Awake()
     {
@@ -197,7 +220,10 @@ public class PickupSystem : MonoBehaviour
         {
             SetSlotItem(slot, item);
             OnLoadoutChanged?.Invoke();
-            Select(slot);
+
+            // เก็บแล้วถือขึ้นมาทันที ยกเว้นโหมด Hub ที่ห้ามถืออาวุธ: เก็บเข้าช่องไว้เฉยๆ
+            if (!Select(slot))
+                SetWeaponHeld(item, false);
         }
         else
         {
@@ -215,6 +241,10 @@ public class PickupSystem : MonoBehaviour
     public bool Select(HeldSlot slot)
     {
         if (!IsSlotAvailable(slot))
+            return false;
+
+        // โหมด Hub: เลือกได้แค่มือเปล่า
+        if (WeaponsBlocked && slot != HeldSlot.Unarmed)
             return false;
 
         GameObject target = GetItem(slot);
@@ -237,10 +267,11 @@ public class PickupSystem : MonoBehaviour
     }
 
     /// <summary>ถอดอาวุธออกจากช่อง → เข้า Inventory (Stash) โดยตรง</summary>
-    public bool UnequipToInventory(HeldSlot slot)
+    /// <param name="fromMenu">เรียกจากเมนู (Esc / Upgrade) ซึ่งล็อกผู้เล่นไว้เอง จึงไม่นับการล็อกนั้นเป็นข้อห้าม</param>
+    public bool UnequipToInventory(HeldSlot slot, bool fromMenu = false)
     {
         GameObject item = GetItem(slot);
-        if (item == null || !CanChangeWeapon)
+        if (item == null || !CanChangeFrom(fromMenu))
             return false;
 
         if (currentSlot == slot)
@@ -256,9 +287,9 @@ public class PickupSystem : MonoBehaviour
     }
 
     /// <summary>ใส่อาวุธจาก Inventory (Stash) กลับเข้าช่องของมัน ถ้าช่องมีของอยู่จะสลับกัน</summary>
-    public bool EquipFromStash(GameObject item)
+    public bool EquipFromStash(GameObject item, bool fromMenu = false)
     {
-        if (item == null || !stash.Contains(item) || !CanChangeWeapon)
+        if (item == null || !stash.Contains(item) || !CanChangeFrom(fromMenu))
             return false;
 
         HeldSlot slot = SlotTypeOf(item) == WeaponSlotType.Primary ? HeldSlot.Primary : HeldSlot.Secondary;

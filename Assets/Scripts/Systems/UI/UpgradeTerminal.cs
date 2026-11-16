@@ -10,12 +10,15 @@ public class UpgradeTerminal : MonoBehaviour, IInteractable
 {
     public string promptText = "[ E ] to upgrade";
 
+    [Tooltip("โมเดลของคนอัปเกรดที่กล้องจะหันไปหาตอนเปิดหน้า Upgrade (เว้นว่าง = ใช้วัตถุนี้เอง)")]
+    public Transform showcaseTarget;
+
     public string PromptText => UpgradeUI.IsOpen ? string.Empty : promptText;
 
     public void Interact(GameObject interactor)
     {
         if (!UpgradeUI.IsOpen)
-            UpgradeUI.Open();
+            UpgradeUI.Open(showcaseTarget != null ? showcaseTarget : transform);
     }
 
     /// <summary>

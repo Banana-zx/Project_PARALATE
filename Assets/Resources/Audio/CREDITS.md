@@ -20,7 +20,6 @@ Downloaded 2026-11-15. Files were renamed only (no editing) so `SfxLibrary` can 
 | footstep_6.ogg | RPG Audio | footstep00.ogg |
 | enemy_footstep_1.ogg | RPG Audio | footstep05.ogg |
 | footstep_2.ogg | Impact Sounds | footstep_concrete_001.ogg |
-| footstep_7.ogg | RPG Audio | footstep01.ogg |
 | enemy_footstep_2.ogg | RPG Audio | footstep06.ogg |
 | footstep_3.ogg | Impact Sounds | footstep_concrete_002.ogg |
 | footstep_8.ogg | RPG Audio | footstep02.ogg |
@@ -59,8 +58,6 @@ Downloaded 2026-11-15. Files were renamed only (no editing) so `SfxLibrary` can 
 | stealth_kill.ogg | RPG Audio | chop.ogg |
 | vault_1.ogg | RPG Audio | cloth2.ogg |
 | vault_2.ogg | RPG Audio | cloth3.ogg |
-| pickup_ammo.ogg | RPG Audio | metalPot1.ogg |
-| pickup_item.ogg | RPG Audio | dropLeather.ogg |
 | xgear_activate.ogg | Impact Sounds | impactGlass_light_000.ogg |
 | xgear_deactivate.ogg | Impact Sounds | impactGlass_light_002.ogg |
 | eyewide_on.ogg | Interface Sounds | switch_003.ogg |

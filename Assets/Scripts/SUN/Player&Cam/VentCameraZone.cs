@@ -12,6 +12,9 @@ public class VentCameraZone : CameraZone
     {
         if (virtualCamera == null) return;
 
+        // โหมด Hub (Base): ไม่สลับไปกล้อง Vent
+        if (player != null && player.HubMode) return;
+
         ApplyBlend();
 
         virtualCamera.Priority.Value = VENT_PRIORITY;

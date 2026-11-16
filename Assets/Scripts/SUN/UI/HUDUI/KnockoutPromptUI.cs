@@ -48,6 +48,7 @@ public class KnockoutPromptUI : MonoBehaviour
 
     private void Awake()
     {
+        ResolveHudGroups();
         ValidateSetup();
 
         if (barSlider != null)
@@ -144,6 +145,58 @@ public class KnockoutPromptUI : MonoBehaviour
 
         if (barRoot != null && barRoot.activeSelf)
             barRoot.SetActive(false);
+    }
+
+    /// <summary>
+    /// ใน Scene อาจมีกลุ่ม "Kill&Mercy" มากกว่า 1 ชุด (ชุดใน MainHUD prefab + ชุดที่วางเองใน Scene)
+    /// ชุดที่สคริปต์นี้ไม่ได้คุมจะค้างข้อความ "New Text" กับหลอดเปล่าอยู่บนจอตลอด จึงต้อง:
+    ///   1) ถ้าช่อง Prompt Root / Bar Root ว่างหรือชี้ของที่หายไป → ต่อกับชุดแรกที่เจอให้เอง (หาจากชื่อวัตถุ)
+    ///   2) เปิดชุดที่ใช้งาน (ให้ป้าย/หลอดโผล่ได้ตอนอยู่หลังศัตรู) และปิดชุดอื่นทั้งหมด
+    /// ทำครั้งเดียวตอนเริ่ม Scene
+    /// </summary>
+    private void ResolveHudGroups()
+    {
+        const string groupName = "Kill&Mercy";
+
+        Transform[] all = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        if (promptRoot == null || barRoot == null)
+        {
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i].name != groupName)
+                    continue;
+
+                Transform text = all[i].Find("Mercy&KillText");
+                Transform bar = all[i].Find("Mercy&KillBar");
+                if (text == null || bar == null)
+                    continue;
+
+                promptRoot = text.gameObject;
+                promptText = text.GetComponent<TMP_Text>();
+                barRoot = bar.gameObject;
+                barSlider = bar.GetComponentInChildren<Slider>(true);
+                barFill = null;
+
+                Transform label = bar.Find("ActionLabel");
+                Transform time = bar.Find("TimeLabel");
+                barLabel = label != null ? label.GetComponent<TMP_Text>() : null;
+                barTimeText = time != null ? time.GetComponent<TMP_Text>() : null;
+                break;
+            }
+        }
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i].name != groupName)
+                continue;
+
+            bool inUse = (promptRoot != null && promptRoot.transform.IsChildOf(all[i])) ||
+                         (barRoot != null && barRoot.transform.IsChildOf(all[i]));
+
+            if (all[i].gameObject.activeSelf != inUse)
+                all[i].gameObject.SetActive(inUse);
+        }
     }
 
     // ตรวจการลากช่อง UI ผิดที่พบบ่อย: promptRoot กับ barRoot ซ้อนกัน

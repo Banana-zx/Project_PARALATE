@@ -116,6 +116,21 @@ public class TopDownPlayerController : MonoBehaviour
     public bool IsCrouching => isCrouching;
     public bool IsAiming => isAiming;
 
+    // ห้ามเล็ง (คลิกขวา) แบบมีเจ้าของ เหมือน movementLockOwners: กล้องอิสระที่ Base ใช้ปิดคลิกขวา
+    private readonly HashSet<object> aimBlockers = new HashSet<object>();
+
+    /// <summary>เล็งได้ไหม: ไม่ได้ถ้ามีระบบสั่งบล็อก หรือกำลังพิงกำแพง (ตอนพิง เมาส์ใช้เลื่อนกล้องซ้าย/ขวา)</summary>
+    public bool CanAim => aimBlockers.Count == 0 && !(wallHug != null && wallHug.IsHugging);
+
+    public void SetAimBlocked(object owner, bool blocked)
+    {
+        if (owner == null)
+            return;
+
+        if (blocked) aimBlockers.Add(owner);
+        else aimBlockers.Remove(owner);
+    }
+
     /// <summary>ตัวคูณความเร็วตอนย่อ (ชิป Passive ของ X-Gear เช่น FleetFoot = 1.05)</summary>
     public float CrouchSpeedMultiplier { get; set; } = 1f;
 
@@ -221,7 +236,7 @@ public class TopDownPlayerController : MonoBehaviour
             return;
         }
 
-        if (aimAction != null) isAiming = aimAction.IsPressed();
+        if (aimAction != null) isAiming = CanAim && aimAction.IsPressed();
 
         if (!isArmed && virtualCamera != null)
         {
@@ -333,15 +348,8 @@ public class TopDownPlayerController : MonoBehaviour
         if (wallHug != null)
             direction = wallHug.ConstrainMoveDirection(direction);
 
-        wallHugMoveAmount = wallHug != null && wallHug.IsHugging
-            ? wallHug.GetWallMoveAmount(direction)
-            : 0f;
-
         if (animator != null)
-       {
             animator.SetBool(IsWallHuggingHash, wallHug != null && wallHug.IsHugging);
-            animator.SetFloat(WallHugMoveHash, wallHugMoveAmount);
-        }
 
         isWalking = direction.magnitude >= 0.1f;
 
@@ -360,7 +368,22 @@ public class TopDownPlayerController : MonoBehaviour
         if (wallHug != null)
             velocity += wallHug.GetDistanceCorrectionVelocity();
 
+        Vector3 positionBeforeMove = transform.position;
         controller.Move(velocity * Time.deltaTime);
+
+        // ท่าเดินพิงกำแพงดูจาก "ระยะที่ขยับได้จริง" ในเฟรมนี้ (ไม่ใช่ปุ่มที่กด):
+        // เดินไปสุดกำแพง/ชนของขวางแล้วตัวไม่ขยับ → ค่าเป็น 0 → เล่นท่ายืนพิงแทนท่าเดิน
+        Vector3 actualVelocity = Time.deltaTime > 0f
+            ? (transform.position - positionBeforeMove) / Time.deltaTime
+            : Vector3.zero;
+
+        wallHugMoveAmount = wallHug != null && wallHug.IsHugging
+            ? wallHug.GetWallMoveAmount(actualVelocity, currentSpeed)
+            : 0f;
+
+        // damp 0.1 วินาที: เบลนด์ซ้าย/นิ่ง/ขวานุ่มขึ้น ไม่กระตุกตอนค่ากระโดด
+        if (animator != null)
+            animator.SetFloat(WallHugMoveHash, wallHugMoveAmount, 0.1f, Time.deltaTime);
 
         if (isWalking && playerAudio != null)
         {
@@ -408,7 +431,40 @@ public class TopDownPlayerController : MonoBehaviour
     }
     public void SetTankControlMode(bool active)
     {
-        isInVentMode = active;
+        // โหมด Hub (Base) ไม่มีการเข้าท่อ/กล้อง Vent
+        isInVentMode = active && !hubMode;
+    }
+
+    private bool hubMode;
+
+    /// <summary>อยู่ในโหมด Hub (พื้นที่ปลอดภัยอย่าง Base ที่ใช้กล้อง TPS หมุนอิสระ) หรือไม่</summary>
+    public bool HubMode => hubMode;
+
+    /// <summary>
+    /// โหมด Hub: ใช้ Player ตัวเดิม (Prefab เดียวกับในด่าน) แต่ปิดระบบที่ไม่ใช้ใน Base
+    ///   - พิงกำแพง + กล้อง WallHug   - กล้อง/การคุมแบบ Vent
+    ///   - การใช้อาวุธทุกชนิด และแถบ/วงล้อเลือกอาวุธ (รวมการเลื่อนลูกกลิ้งเปลี่ยนอาวุธ)
+    /// เรียกจาก ThirdPersonFollowCamera (กล้อง TPS ของ Base) ปิดโหมด = ทุกอย่างกลับมาทำงานตามเดิม
+    /// </summary>
+    public void SetHubMode(bool active)
+    {
+        hubMode = active;
+
+        if (active)
+            isInVentMode = false;
+
+        // ปิดคอมโพเนนต์ = ระบบนั้นหยุดทำงานเอง (WallHugController.OnDisable เลิกพิง, WallHugCameraPan.OnDisable คืนกล้อง)
+        WallHugController hug = wallHug != null ? wallHug : GetComponent<WallHugController>();
+        if (hug != null)
+            hug.enabled = !active;
+
+        WallHugCameraPan hugCamera = GetComponent<WallHugCameraPan>();
+        if (hugCamera != null)
+            hugCamera.enabled = !active;
+
+        PickupSystem pickup = GetComponent<PickupSystem>();
+        if (pickup != null)
+            pickup.SetWeaponsBlocked(active);
     }
 
     void HandleVentMovement()

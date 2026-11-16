@@ -151,7 +151,7 @@ public class PlayerAudioController : MonoBehaviour
 
         audioSource.pitch = 1f + UnityEngine.Random.Range(-pitchVariance, pitchVariance);
         float volume = footstepBaseVolume + UnityEngine.Random.Range(-volumeVariance, volumeVariance);
-        audioSource.PlayOneShot(clip, Mathf.Clamp01(volume));
+        audioSource.PlayOneShot(clip, Mathf.Clamp01(volume) * SfxLibrary.GainOf(clip));
     }
 
     public void PlayWhistle()

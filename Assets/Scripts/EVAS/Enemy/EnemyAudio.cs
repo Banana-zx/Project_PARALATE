@@ -69,7 +69,7 @@ public class EnemyAudioController : MonoBehaviour
 
         audioSource.pitch = 1f + Random.Range(-footstepPitchVariance, footstepPitchVariance);
         float volume = footstepBaseVolume + Random.Range(-footstepVolumeVariance, footstepVolumeVariance);
-        audioSource.PlayOneShot(clip, Mathf.Clamp01(volume));
+        audioSource.PlayOneShot(clip, Mathf.Clamp01(volume) * SfxLibrary.GainOf(clip));
     }
 
     public void PlayFireSound()
@@ -91,7 +91,7 @@ public class EnemyAudioController : MonoBehaviour
             return;
 
         audioSource.pitch = 1f;
-        audioSource.PlayOneShot(alertSound, alertVolume);
+        audioSource.PlayOneShot(alertSound, alertVolume * SfxLibrary.GainOf(alertSound));
     }
 
     int PickIndex(int length, ref int lastIndex)

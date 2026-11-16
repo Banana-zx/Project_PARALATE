@@ -30,6 +30,10 @@ public class WallHugController : MonoBehaviour
     // Call once per frame from TopDownPlayerController with the raw world move direction.
     public void UpdateWallHug(Vector3 desiredDirection)
     {
+        // คอมโพเนนต์ถูกปิด (เช่นโหมด Hub ใน Base): ไม่เข้าท่าพิงกำแพง
+        if (!enabled)
+            return;
+
         desiredDirection.y = 0f;
 
         if (isHugging)
@@ -147,6 +151,22 @@ public class WallHugController : MonoBehaviour
 
         Vector3 wallRight = Vector3.Cross(Vector3.up, wallNormal).normalized;
         return Mathf.Clamp(Vector3.Dot(direction.normalized, wallRight), -1f, 1f);
+    }
+
+    /// <summary>
+    /// ความเร็วที่ "ขยับได้จริง" ตามแนวกำแพง เทียบกับความเร็วเต็ม: -1 = ไปทางซ้ายของตัวละคร, +1 = ไปทางขวา, 0 = ไม่ขยับ
+    /// ใช้คุมท่าเดินพิงกำแพง: ถ้าเดินไปชนมุม/ของขวางจนไม่ขยับ ค่าจะเป็น 0 แม้ยังกดปุ่มเดินอยู่
+    /// </summary>
+    public float GetWallMoveAmount(Vector3 actualVelocity, float fullSpeed)
+    {
+        if (!isHugging || fullSpeed <= 0.01f)
+            return 0f;
+
+        Vector3 wallRight = Vector3.Cross(Vector3.up, wallNormal).normalized;
+        float amount = Vector3.Dot(actualVelocity, wallRight) / fullSpeed;
+
+        // ตัดค่าจิ๋วๆ (แรงดันรักษาระยะจากกำแพง / ความคลาดเคลื่อนของฟิสิกส์) ไม่ให้ขาขยับเอง
+        return Mathf.Abs(amount) < 0.15f ? 0f : Mathf.Clamp(amount, -1f, 1f);
     }
 
     public Vector3 GetDistanceCorrectionVelocity()

@@ -23,8 +23,7 @@ stealth_kill          กด F ฆ่าสำเร็จ
 knockout              รัดคอสำเร็จ
 player_hurt           ผู้เล่นโดนยิง
 vault                 ข้ามสิ่งกีดขวาง
-pickup_ammo           เก็บกล่องกระสุน
-pickup_item           เก็บชิป / Map Data / Keycard
+pickup                เสียงเก็บของเสียงเดียวของทั้งเกม (ปืน, กระสุน, ชิป, Keycard, Scrap, Metal) = สำเนาของ ArtAssets/Sounds/SFX/Weapon/EquipAK.wav (ไฟล์ของโปรเจกต์เอง ไม่ใช่ CC0)
 xgear_activate        ใช้ Active Chip
 xgear_deactivate      ผลของ Active Chip หมด
 eyewide_on / eyewide_off   เปิด / ปิด Eye Wide (T)

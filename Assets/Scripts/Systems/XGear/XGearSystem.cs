@@ -239,12 +239,16 @@ public class XGearSystem : MonoBehaviour
         if (mapRoot != null && mapRoot.GetComponent<Canvas>() == null)
             mapRoot.gameObject.SetActive(hasMap);
 
-        if (!hasMap)
-            return;
-
         MinimapCameraFollow follow = FindFirstObjectByType<MinimapCameraFollow>(FindObjectsInactive.Include);
         Camera mapCamera = follow != null ? follow.GetComponent<Camera>() : null;
         if (mapCamera == null)
+            return;
+
+        // ประหยัดเฟรมเรต: ไม่ได้โชว์แผนที่ = ปิดกล้อง Minimap สนิท / โชว์อยู่ = เรนเดอร์ 10 ครั้งต่อวินาทีพอ
+        MinimapRenderThrottle throttle = MinimapRenderThrottle.EnsureOn(mapCamera);
+        throttle.SetVisible(hasMap);
+
+        if (!hasMap)
             return;
 
         // ขอบเขตของด่าน = พื้นที่เดินได้ทั้งหมดของ NavMesh แล้วตั้งกล้อง Minimap ให้เห็นทั้งหมดจากด้านบน
@@ -284,7 +288,15 @@ public static class PlayerSystems
         GameObject go = player.gameObject;
 
         if (go.GetComponent<XGearSystem>() == null) go.AddComponent<XGearSystem>();
-        if (go.GetComponent<EyeWideController>() == null) go.AddComponent<EyeWideController>();
+
+        // Eye Wide อยู่บนวัตถุลูกชื่อ "EyeWide" ตัวเดียว: ถ้าใน Prefab/Scene วางไว้แล้ว (ปรับค่าใน Inspector ได้) ใช้ตัวนั้น
+        // ถ้ายังไม่มีค่อยสร้างให้ จึงไม่มีทางเกิดสองตัวซ้อนกัน
+        if (go.GetComponentInChildren<EyeWideController>(true) == null)
+        {
+            GameObject eyeWide = new GameObject("EyeWide");
+            eyeWide.transform.SetParent(go.transform, false);
+            eyeWide.AddComponent<EyeWideController>();
+        }
 
         PauseMenuUI.EnsureInScene(player);
         UpgradeTerminal.EnsureInBase();

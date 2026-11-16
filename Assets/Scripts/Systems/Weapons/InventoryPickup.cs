@@ -41,10 +41,14 @@ public class InventoryPickup : MonoBehaviour, IInteractable
             RunInventory.Instance.Add(itemId, amount);
         }
 
-        if (pickupSound != null)
-            AudioManager.PlayPickup(pickupSound, transform.position);
-        else if (!SfxLibrary.Play(def.category == ItemCategory.Ammo ? "pickup_ammo" : "pickup_item"))
-            AudioManager.Instance?.PlayItemPickupSfx();
+        // เสียงเก็บของเสียงเดียวกันทั้งเกม (ถ้าไม่มีไฟล์ ใช้ pickupSound ของ Prefab / เสียงเริ่มต้นของ AudioManager)
+        if (!SfxLibrary.PlayPickup())
+        {
+            if (pickupSound != null)
+                AudioManager.PlayPickup(pickupSound, transform.position);
+            else
+                AudioManager.Instance?.PlayItemPickupSfx();
+        }
 
         HudToast.Show("+ " + def.displayName + " x" + amount);
         Destroy(gameObject);
