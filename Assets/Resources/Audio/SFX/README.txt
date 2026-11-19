@@ -37,3 +37,6 @@ upgrade_success       อัปเกรดอาวุธสำเร็จ
 craft_success         คราฟต์กระสุนสำเร็จ
 chip_insert / chip_remove  ใส่ / ถอด Data ของ X-Gear
 note_open / note_close     เปิด / ปิดโน้ต
+door_open_1..N         ประตูบานพับเปิด (HingedDoor)
+door_close_1..N        ประตูบานพับปิด
+door_locked           กดประตูที่ล็อก (ไม่มีไฟล์ = ใช้ empty_click)

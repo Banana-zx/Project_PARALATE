@@ -67,6 +67,16 @@ public class TopDownPlayerController : MonoBehaviour
     [Tooltip("ถ้า |camera.forward.y| เกินค่านี้ ถือว่ากล้องมองชันเกินไป จะสลับไปใช้ camera.up แทน")]
     public float topDownAngleThreshold = 0.9f;
 
+    [Tooltip("กล้องตัดเปลี่ยนมุม/เข้าโซนใหม่ระหว่างกดเดินค้าง: เดินทิศเดิมต่อจนกว่าจะปล่อยปุ่มหรือเปลี่ยนทิศที่กด " +
+             "(กันตัวละครหักกลับไปมาตรงรอยต่อกล้อง แบบเกมกล้องมุมตายตัว)")]
+    public bool keepDirectionOnCameraCut = true;
+
+    // แกนการเดินที่ใช้อยู่ (ค้างไว้ตอนกล้องตัด)
+    private Vector3 heldForward = Vector3.forward;
+    private Vector3 heldRight = Vector3.right;
+    private bool hasHeldAxes;
+    private Vector2 heldInput;
+
     [Header("Vent / Tank Control Settings")]
     public bool isInVentMode = false;
     public float ventMoveSpeed = 2.5f;
@@ -309,9 +319,85 @@ public class TopDownPlayerController : MonoBehaviour
             ? moveAction.ReadValue<Vector2>()
             : Vector2.zero;
 
-        return useCameraRelativeMovement
-            ? GetCameraRelativeDirection(moveInput)
-            : new Vector3(moveInput.x, 0f, moveInput.y).normalized;
+        GetMoveAxes(out Vector3 forward, out Vector3 right);
+
+        if (moveInput.sqrMagnitude < 0.01f)
+        {
+            // ปล่อยปุ่ม: ใช้แกนใหม่ได้ทันทีครั้งหน้า
+            hasHeldAxes = false;
+            return Vector3.zero;
+        }
+
+        if (keepDirectionOnCameraCut && hasHeldAxes)
+        {
+            bool axesChanged = Vector3.Dot(forward, heldForward) < 0.94f;   // แกนเปลี่ยนเกิน ~20°
+            bool inputSame = Vector2.Dot(moveInput.normalized, heldInput) > 0.8f;
+
+            if (axesChanged && inputSame)
+            {
+                forward = heldForward;   // กดค้างทิศเดิม → เดินทิศเดิมต่อ
+                right = heldRight;
+            }
+        }
+
+        heldForward = forward;
+        heldRight = right;
+        heldInput = moveInput.normalized;
+        hasHeldAxes = true;
+
+        return (forward * moveInput.y + right * moveInput.x).normalized;
+    }
+
+    /// <summary>
+    /// แกนการเดิน (W = forward, D = right) บนพื้นราบ:
+    /// ถ้าผู้เล่นอยู่ใน CameraZone ที่ตั้ง Move Space ไว้ ใช้ค่าของโซนนั้น ไม่งั้นใช้ Use Camera Relative Movement ของผู้เล่น
+    /// </summary>
+    void GetMoveAxes(out Vector3 forward, out Vector3 right)
+    {
+        CameraZone zone = CameraZone.CurrentMoveZone;
+        CameraZone.MoveSpace space = zone != null ? zone.moveSpace : CameraZone.MoveSpace.PlayerDefault;
+
+        if (space == CameraZone.MoveSpace.PlayerDefault)
+            space = useCameraRelativeMovement ? CameraZone.MoveSpace.CameraRelative : CameraZone.MoveSpace.WorldAxes;
+
+        if (space == CameraZone.MoveSpace.CameraRelative && TryGetCameraAxes(out forward, out right))
+            return;
+
+        if (zone != null && space == CameraZone.MoveSpace.CustomAxes)
+        {
+            zone.GetFixedAxes(out forward, out right);
+            return;
+        }
+
+        forward = Vector3.forward;
+        right = Vector3.right;
+    }
+
+    bool TryGetCameraAxes(out Vector3 forward, out Vector3 right)
+    {
+        if (mainCamera == null)
+            mainCamera = Camera.main;
+
+        forward = Vector3.forward;
+        right = Vector3.right;
+
+        if (mainCamera == null)
+            return false;
+
+        Vector3 camForward = mainCamera.transform.forward;
+        Vector3 camRight = mainCamera.transform.right;
+
+        // กล้องมองชันเกือบตรงลงพื้น (top-down): forward ไม่มีส่วนแนวราบเหลือ ใช้ camera.up แทน
+        Vector3 forwardOnPlane = Mathf.Abs(camForward.y) > topDownAngleThreshold ? mainCamera.transform.up : camForward;
+        forwardOnPlane.y = 0f;
+        camRight.y = 0f;
+
+        if (forwardOnPlane.sqrMagnitude < 0.0001f || camRight.sqrMagnitude < 0.0001f)
+            return false;
+
+        forward = forwardOnPlane.normalized;
+        right = camRight.normalized;
+        return true;
     }
 
     Vector3 GetCameraRelativeDirection(Vector2 moveInput)

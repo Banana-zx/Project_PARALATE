@@ -327,13 +327,19 @@ public class HudToast : MonoBehaviour
 {
     private static HudToast instance;
 
+    /// <summary>
+    /// ปิดแถบข้อความแจ้งเตือนกลางล่างจอทั้งเกม (Locked, X-Gear depleted, + Scrap x1 ฯลฯ) ตามที่ขอ
+    /// โค้ดที่เรียก HudToast.Show ยังอยู่ครบ ถ้าอยากเปิดกลับ เปลี่ยนเป็น true ที่บรรทัดนี้บรรทัดเดียว
+    /// </summary>
+    public static bool Enabled = false;
+
     private TextMeshProUGUI label;
     private CanvasGroup group;
     private float hideAt;
 
     public static void Show(string message, float duration = 1.6f)
     {
-        if (!Application.isPlaying || string.IsNullOrEmpty(message))
+        if (!Enabled || !Application.isPlaying || string.IsNullOrEmpty(message))
             return;
 
         if (instance == null)

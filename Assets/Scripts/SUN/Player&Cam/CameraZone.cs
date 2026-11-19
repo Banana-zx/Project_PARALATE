@@ -32,6 +32,61 @@ public class CameraZone : MonoBehaviour
     [Tooltip("เปิดเพื่อดู Console ว่าโซนนี้เปิด/ปิดกล้องตอนไหน (ใช้ไล่ปัญหากล้องค้าง)")]
     public bool debugLog = false;
 
+    // ------------------------------------------------------------ ทิศการเดินของผู้เล่นในโซนนี้
+    public enum MoveSpace
+    {
+        PlayerDefault,   // ใช้ค่าบนตัวผู้เล่น (Use Camera Relative Movement)
+        CameraRelative,  // กด W = เดินไปทางที่กล้องหัน
+        WorldAxes,       // กด W = แกน Z ของโลก (ไม่สนกล้อง)
+        CustomAxes       // กด W = ลูกศรสีน้ำเงิน (แกน Z) ของ Move Axes
+    }
+
+    [Header("ทิศการเดินของผู้เล่นในโซนนี้")]
+    [Tooltip("PlayerDefault = ตามค่าบนตัวผู้เล่น / CameraRelative = ตามกล้อง / WorldAxes = ตามแกนโลก / CustomAxes = ตามแกนของ Move Axes")]
+    public MoveSpace moveSpace = MoveSpace.PlayerDefault;
+    [Tooltip("ใช้กับ CustomAxes: ลูกศรสีน้ำเงิน (Z) ของวัตถุนี้ = ทิศกด W (ว่าง = ใช้แกนของโซนนี้เอง)")]
+    public Transform moveAxes;
+
+    // โซนที่ผู้เล่นยืนอยู่ เรียงตามลำดับที่เข้า: โซนล่าสุด (ตัวท้าย) เป็นตัวกำหนดทิศการเดิน
+    private static readonly List<CameraZone> occupiedZones = new List<CameraZone>();
+
+    /// <summary>โซนล่าสุดที่ผู้เล่นอยู่ (null = ไม่ได้อยู่ในโซนไหน)</summary>
+    public static CameraZone CurrentMoveZone =>
+        occupiedZones.Count > 0 ? occupiedZones[occupiedZones.Count - 1] : null;
+
+    /// <summary>แกน W (forward) และ D (right) บนพื้นราบ สำหรับ WorldAxes / CustomAxes</summary>
+    public void GetFixedAxes(out Vector3 forward, out Vector3 right)
+    {
+        if (moveSpace == MoveSpace.CustomAxes)
+        {
+            Transform axes = moveAxes != null ? moveAxes : transform;
+            forward = axes.forward;
+            forward.y = 0f;
+
+            if (forward.sqrMagnitude < 0.0001f)
+                forward = axes.up; // ถ้าแกน Z ชี้ลงพื้น ใช้แกน Y แทน
+
+            forward.y = 0f;
+            forward.Normalize();
+            right = Vector3.Cross(Vector3.up, forward);
+            return;
+        }
+
+        forward = Vector3.forward;
+        right = Vector3.right;
+    }
+
+    private void MarkOccupied()
+    {
+        occupiedZones.Remove(this);
+        occupiedZones.Add(this);
+    }
+
+    private void MarkLeft()
+    {
+        occupiedZones.Remove(this);
+    }
+
     // เก็บค่า Default Blend เดิมของ Brain ไว้ ให้ห้องที่ไม่ได้ Override กลับมาใช้ค่าเดิม
     private static CinemachineBrain trackedBrain;
     private static CinemachineBlendDefinition originalBlend;
@@ -43,6 +98,12 @@ public class CameraZone : MonoBehaviour
 
     private readonly HashSet<Collider> playerColliders =
         new HashSet<Collider>();
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        occupiedZones.Clear();
+    }
 
     protected virtual void OnEnable()
     {
@@ -123,6 +184,8 @@ public class CameraZone : MonoBehaviour
 
     protected virtual void ActivateCamera()
     {
+        MarkOccupied();
+
         if (virtualCamera == null)
             return;
 
@@ -139,8 +202,9 @@ public class CameraZone : MonoBehaviour
 
     protected virtual void OnTriggerEnter(Collider other)
     {
-        if (virtualCamera == null ||
-            !other.CompareTag("Player"))
+        // โซนที่ไม่มีกล้อง ก็ยังใช้กำหนดทิศการเดินได้ (ถ้าตั้ง Move Space ไว้)
+        if (!other.CompareTag("Player") ||
+            (virtualCamera == null && moveSpace == MoveSpace.PlayerDefault))
             return;
 
         bool wasEmpty = playerColliders.Count == 0;
@@ -156,6 +220,9 @@ public class CameraZone : MonoBehaviour
             return;
 
         playerColliders.Remove(other);
+
+        if (playerColliders.Count == 0)
+            MarkLeft();
 
         if (playerColliders.Count == 0 &&
             virtualCamera != null)
@@ -210,6 +277,7 @@ public class CameraZone : MonoBehaviour
     protected virtual void ForceExit()
     {
         playerColliders.Clear();
+        MarkLeft();
 
         if (virtualCamera != null)
             virtualCamera.Priority.Value = inactivePriority;
@@ -218,10 +286,27 @@ public class CameraZone : MonoBehaviour
             Debug.Log($"{name}: ปิดกล้องโดยบังคับ (ผู้เล่นถูกวาร์ปออกไป)", this);
     }
 
+#if UNITY_EDITOR
+    protected virtual void OnDrawGizmosSelected()
+    {
+        if (moveSpace != MoveSpace.WorldAxes && moveSpace != MoveSpace.CustomAxes)
+            return;
+
+        GetFixedAxes(out Vector3 forward, out Vector3 right);
+        Vector3 origin = transform.position + Vector3.up * 0.2f;
+        Gizmos.color = new Color(0.2f, 1f, 0.4f, 0.9f);
+        Gizmos.DrawLine(origin, origin + forward * 2f);
+        Gizmos.DrawLine(origin + forward * 2f, origin + forward * 1.6f + right * 0.3f);
+        Gizmos.DrawLine(origin + forward * 2f, origin + forward * 1.6f - right * 0.3f);
+        UnityEditor.Handles.Label(origin + forward * 2.2f, "W");
+    }
+#endif
+
     protected virtual void OnDisable()
     {
         activeZones.Remove(this);
         playerColliders.Clear();
+        MarkLeft();
 
         if (virtualCamera != null)
             virtualCamera.Priority.Value = inactivePriority;

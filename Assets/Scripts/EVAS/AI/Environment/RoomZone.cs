@@ -87,6 +87,9 @@ public sealed class RoomZone : MonoBehaviour
         if (other.CompareTag("Player")) players.Remove(other.transform);
     }
 
+    /// <summary>ศัตรูที่อยู่ในห้องนี้ (ใช้กับกล้องวงจรปิดที่เรียกศัตรูในห้อง)</summary>
+    public IReadOnlyCollection<AlertState> Enemies => enemies;
+
     public void BroadcastAlert(AlertState sender, Vector3 sourcePosition)
     {
         foreach (AlertState enemy in enemies)

@@ -1,14 +1,23 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// ศัตรูชนิดใหม่: กล้องวงจรปิด หันกวาดซ้าย-ขวา ถ้าเห็นผู้เล่นนานพอจะเรียกศัตรูมาที่ตำแหน่งผู้เล่น
+/// ศัตรูชนิดใหม่: กล้องวงจรปิด หันกวาดซ้าย-ขวา ถ้าเห็นผู้เล่นนานพอจะเรียกศัตรูมาไล่ล่า
 ///
 /// การทำงาน (State Machine 3 สถานะ):
 ///   Sweep  : หมุนไปหาปลายซ้าย/ขวาด้วยความเร็ว Turn Speed
 ///   Hold   : ถึงปลายแล้วค้าง Hold Time วินาที แล้วสลับไปอีกฝั่ง
 ///   Track  : เห็นผู้เล่น → หยุดกวาด หันตาม และนับเวลา Detect Time ครบแล้ว Alert
-/// การ Alert ใช้ระบบเดียวกับการเรียกกำลังเสริมของศัตรู: RoomZone.BroadcastAlert ถ้าอยู่ในห้อง
-/// ไม่งั้นแจ้ง AlertState ทุกตัวในรัศมี Alert Radius (AlertState.ReceiveReinforcement)
+///
+/// กรวยสายตาแบบ "ตัดปลาย": ใต้กล้องมีจุดบอด (Near Blind Distance) ผู้เล่นเดินลอดใต้กล้องได้
+///   ระยะ Near Blind Distance ถึง View Radius เท่านั้นที่กล้องเห็น (รูปสี่เหลี่ยมคางหมูโค้งบนพื้น)
+///
+/// ศัตรูที่ถูกเรียกเมื่อ Alert (ใช้ข้อแรกที่มี):
+///   1) Linked Enemies : ลากศัตรูใส่เองใน Inspector
+///   2) Room           : RoomZone ของห้อง (ว่าง = หา RoomZone ที่ผู้เล่น/กล้องยืนอยู่เอง)
+///   3) Alert Radius   : ศัตรูทุกตัวในรัศมีรอบกล้อง
+/// Act As Enemy Eyes: หลัง Alert ตราบใดที่กล้องยังเห็นผู้เล่น กล้องจะส่งตำแหน่งผู้เล่นให้ศัตรูกลุ่มนั้นทุก Report Interval
+///   ศัตรูจะไล่ล่าผู้เล่นตรงๆ เหมือนเห็นเอง (กล้อง = ตาของศัตรู)
 ///
 /// วิธีใช้: ลาก Prefab SecurityCamera ไปติดผนัง/เพดาน ให้แกน Z (ลูกศรสีน้ำเงิน) ชี้ไปทางกึ่งกลางที่ต้องการให้มอง
 /// </summary>
@@ -30,6 +39,8 @@ public class SecurityCamera : MonoBehaviour
 
     [Header("Vision")]
     public float viewRadius = 12f;
+    [Tooltip("ระยะจากใต้กล้องที่กล้องมองไม่เห็น (เมตร, วัดบนพื้นราบ) = ทางเดินลอดใต้กล้อง / 0 = กรวยแหลมแบบเดิม")]
+    [Min(0f)] public float nearBlindDistance = 2.5f;
     [Range(1f, 180f)] public float viewAngle = 50f;
     [Tooltip("สิ่งที่บังสายตา (ค่าเริ่มต้น = Layer Obstacle)")]
     public LayerMask obstructionMask;
@@ -38,11 +49,25 @@ public class SecurityCamera : MonoBehaviour
     [Header("Alert")]
     [Tooltip("ต้องเห็นผู้เล่นต่อเนื่องกี่วินาทีจึงจะ Alert")]
     public float detectTime = 1.2f;
-    [Tooltip("รัศมีเรียกศัตรู (ใช้เมื่อกล้อง/ผู้เล่นไม่ได้อยู่ใน RoomZone)")]
-    public float alertRadius = 25f;
     [Tooltip("หลัง Alert แล้วต้องรอกี่วินาทีจึง Alert ซ้ำได้")]
     public float alertCooldown = 6f;
     public AudioClip alertSound;
+
+    [Header("ศัตรูที่ถูกเรียก (ใช้ข้อแรกที่มี)")]
+    [Tooltip("1) ลากศัตรูที่ต้องการให้กล้องนี้เรียกมาใส่ตรงนี้")]
+    public AlertState[] linkedEnemies;
+    [Tooltip("2) ห้องของกล้องนี้ (ว่าง = หา RoomZone ที่ผู้เล่นหรือกล้องอยู่ให้เอง)")]
+    public RoomZone room;
+    [Tooltip("3) ถ้าไม่มีทั้งสองข้อบน: เรียกศัตรูทุกตัวในรัศมีนี้รอบกล้อง")]
+    public float alertRadius = 25f;
+
+    [Header("กล้อง = ตาของศัตรู")]
+    [Tooltip("หลัง Alert ถ้ากล้องยังเห็นผู้เล่น ส่งตำแหน่งให้ศัตรูไล่ล่าต่อเนื่อง")]
+    public bool actAsEnemyEyes = true;
+    [Tooltip("ส่งตำแหน่งทุกกี่วินาที")]
+    [Min(0.1f)] public float reportInterval = 0.5f;
+    [Tooltip("แต่ละครั้งที่ได้รายงาน ศัตรูจะไล่ล่าอย่างน้อยกี่วินาที (แม้ตัวเองยังไม่เห็นผู้เล่น)")]
+    [Min(0f)] public float chaseTimePerReport = 4f;
 
     [Header("Vision Cone Visual")]
     public bool showVisionCone = true;
@@ -60,8 +85,10 @@ public class SecurityCamera : MonoBehaviour
     private float nextAlertTime;
     private float alertFlashUntil;
     private float nextVisionCheck;
+    private float nextReportTime;
     private bool seesPlayer;
     private Transform player;
+    private readonly List<AlertState> calledEnemies = new List<AlertState>();
 
     private Transform coneTransform;
     private Mesh coneMesh;
@@ -168,7 +195,6 @@ public class SecurityCamera : MonoBehaviour
         }
 
         // หันตามผู้เล่น (ภายในช่วงที่กล้องหมุนได้)
-        Vector3 local = transform.InverseTransformPoint(player.position);
         Quaternion baseWorld = (head.parent != null ? head.parent.rotation : Quaternion.identity) * baseLocalRotation;
         Vector3 toPlayer = Quaternion.Inverse(baseWorld) * (player.position - head.position);
         float targetYaw = Mathf.Clamp(Mathf.Atan2(toPlayer.x, toPlayer.z) * Mathf.Rad2Deg, -sweepAngle, sweepAngle);
@@ -178,6 +204,8 @@ public class SecurityCamera : MonoBehaviour
 
         if (detectTimer >= detectTime && Time.time >= nextAlertTime)
             Alert();
+        else if (actAsEnemyEyes && calledEnemies.Count > 0 && Time.time >= nextReportTime)
+            ReportToEnemies(); // Alert ไปแล้ว ยังเห็นอยู่ → เป็นตาให้ศัตรูต่อ
     }
 
     private bool CheckVision()
@@ -190,8 +218,9 @@ public class SecurityCamera : MonoBehaviour
         Vector3 flat = target - origin;
         flat.y = 0f;
 
-        if (flat.sqrMagnitude > viewRadius * viewRadius)
-            return false;
+        float sqr = flat.sqrMagnitude;
+        if (sqr > viewRadius * viewRadius || sqr < nearBlindDistance * nearBlindDistance)
+            return false; // ไกลเกิน หรืออยู่ในจุดบอดใต้กล้อง
 
         Vector3 forward = head.forward;
         forward.y = 0f;
@@ -208,32 +237,72 @@ public class SecurityCamera : MonoBehaviour
         alertFlashUntil = Time.time + 1.5f;
         detectTimer = 0f;
 
-        Vector3 playerPosition = player.position;
-
         if (alertSound != null)
             AudioSource.PlayClipAtPoint(alertSound, head.position);
         else
             SfxLibrary.Play("camera_alert", head.position);
 
-        // ศัตรูในห้องเดียวกับผู้เล่น (หรือห้องของกล้อง) ถ้ามี RoomZone
-        RoomZone zone = RoomZone.GetAt(playerPosition) ?? RoomZone.GetAt(head.position);
-        if (zone != null)
+        CollectEnemies(player.position);
+        ReportToEnemies();
+    }
+
+    // รวบรวมศัตรูที่กล้องนี้จะเรียก (ตามลำดับ Linked → Room → Radius)
+    private void CollectEnemies(Vector3 playerPosition)
+    {
+        calledEnemies.Clear();
+
+        if (linkedEnemies != null)
         {
-            zone.BroadcastAlert(null, playerPosition);
-            return;
+            for (int i = 0; i < linkedEnemies.Length; i++)
+                if (linkedEnemies[i] != null)
+                    calledEnemies.Add(linkedEnemies[i]);
         }
 
-        AlertState[] enemies = FindObjectsByType<AlertState>();
-        float sqrRadius = alertRadius * alertRadius;
+        if (calledEnemies.Count > 0)
+            return;
 
-        for (int i = 0; i < enemies.Length; i++)
+        RoomZone zone = room != null ? room : RoomZone.GetAt(playerPosition) ?? RoomZone.GetAt(head.position);
+        if (zone != null)
         {
-            if ((enemies[i].transform.position - head.position).sqrMagnitude <= sqrRadius)
-                enemies[i].ReceiveReinforcement(playerPosition);
+            foreach (AlertState enemy in zone.Enemies)
+                if (enemy != null)
+                    calledEnemies.Add(enemy);
+
+            if (calledEnemies.Count > 0)
+                return;
+        }
+
+        float sqrRadius = alertRadius * alertRadius;
+        for (int i = 0; i < AlertState.Active.Count; i++)
+        {
+            AlertState enemy = AlertState.Active[i];
+            if (enemy != null && (enemy.transform.position - head.position).sqrMagnitude <= sqrRadius)
+                calledEnemies.Add(enemy);
         }
     }
 
-    // ------------------------------------------------------------ กรวยสายตาบนพื้น (แนวเดียวกับ FieldOfView)
+    private void ReportToEnemies()
+    {
+        nextReportTime = Time.time + reportInterval;
+        Vector3 playerPosition = player.position;
+
+        for (int i = calledEnemies.Count - 1; i >= 0; i--)
+        {
+            AlertState enemy = calledEnemies[i];
+            if (enemy == null || !enemy.isActiveAndEnabled)
+            {
+                calledEnemies.RemoveAt(i);
+                continue;
+            }
+
+            if (actAsEnemyEyes)
+                enemy.ReceiveSpotterReport(playerPosition, chaseTimePerReport); // ไล่ล่าผู้เล่นตรงๆ
+            else
+                enemy.ReceiveReinforcement(playerPosition);                     // แบบเดิม: ไปตรวจจุดที่เห็น
+        }
+    }
+
+    // ------------------------------------------------------------ กรวยสายตาบนพื้น (ตัดปลายใต้กล้อง)
 
     private void CreateCone()
     {
@@ -253,15 +322,25 @@ public class SecurityCamera : MonoBehaviour
         renderer.material = coneMaterial;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
+        // แถบโค้ง 2 แถว: แถวใน (ขอบจุดบอด) กับแถวนอก (ปลายสายตา) ต่อกันเป็นสี่เหลี่ยมทีละช่อง
         int segments = Mathf.Max(3, coneSegments);
-        coneVertices = new Vector3[segments + 2];
-        int[] triangles = new int[segments * 3];
+        coneVertices = new Vector3[(segments + 1) * 2];
+        int[] triangles = new int[segments * 6];
 
         for (int i = 0; i < segments; i++)
         {
-            triangles[i * 3] = 0;
-            triangles[i * 3 + 1] = i + 1;
-            triangles[i * 3 + 2] = i + 2;
+            int inner = i * 2;
+            int outer = inner + 1;
+            int nextInner = inner + 2;
+            int nextOuter = inner + 3;
+            int t = i * 6;
+
+            triangles[t] = inner;
+            triangles[t + 1] = outer;
+            triangles[t + 2] = nextOuter;
+            triangles[t + 3] = inner;
+            triangles[t + 4] = nextOuter;
+            triangles[t + 5] = nextInner;
         }
 
         coneMesh.vertices = coneVertices;
@@ -288,11 +367,10 @@ public class SecurityCamera : MonoBehaviour
         Vector3 origin = new Vector3(head.position.x, groundY, head.position.z);
         coneTransform.SetPositionAndRotation(origin, Quaternion.LookRotation(forward.normalized, Vector3.up));
 
-        int segments = coneVertices.Length - 2;
+        int segments = coneVertices.Length / 2 - 1;
         float half = viewAngle * 0.5f;
+        float near = Mathf.Min(nearBlindDistance, viewRadius);
         Vector3 rayOrigin = origin + Vector3.up * 0.5f;
-
-        coneVertices[0] = Vector3.zero;
 
         for (int i = 0; i <= segments; i++)
         {
@@ -304,7 +382,9 @@ public class SecurityCamera : MonoBehaviour
             if (Physics.Raycast(rayOrigin, worldDirection, out RaycastHit hit, viewRadius, obstructionMask, QueryTriggerInteraction.Ignore))
                 distance = hit.distance;
 
-            coneVertices[i + 1] = localDirection * distance;
+            // ถ้ากำแพงอยู่ใกล้กว่าขอบจุดบอด แถวในกับแถวนอกจะทับกัน = ช่องนั้นหายไป
+            coneVertices[i * 2] = localDirection * Mathf.Min(near, distance);
+            coneVertices[i * 2 + 1] = localDirection * distance;
         }
 
         coneMesh.vertices = coneVertices;
@@ -336,10 +416,43 @@ public class SecurityCamera : MonoBehaviour
         forward.y = 0f;
         forward.Normalize();
 
+        // ขอบการกวาด: เส้นเริ่มที่ขอบจุดบอด
         Gizmos.color = Color.cyan;
-        Gizmos.DrawRay(pivot.position, Quaternion.Euler(0f, -sweepAngle, 0f) * forward * viewRadius);
-        Gizmos.DrawRay(pivot.position, Quaternion.Euler(0f, sweepAngle, 0f) * forward * viewRadius);
-        Gizmos.color = new Color(1f, 0.3f, 0f, 0.6f);
-        Gizmos.DrawWireSphere(pivot.position, alertRadius);
+        Vector3 left = Quaternion.Euler(0f, -sweepAngle, 0f) * forward;
+        Vector3 right = Quaternion.Euler(0f, sweepAngle, 0f) * forward;
+        Gizmos.DrawLine(pivot.position + left * nearBlindDistance, pivot.position + left * viewRadius);
+        Gizmos.DrawLine(pivot.position + right * nearBlindDistance, pivot.position + right * viewRadius);
+
+        // วงจุดบอดใต้กล้อง
+        if (nearBlindDistance > 0f)
+        {
+            Gizmos.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+            Vector3 previous = pivot.position + forward * nearBlindDistance;
+            for (int i = 1; i <= 24; i++)
+            {
+                Vector3 next = pivot.position + Quaternion.Euler(0f, i * 15f, 0f) * forward * nearBlindDistance;
+                Gizmos.DrawLine(previous, next);
+                previous = next;
+            }
+        }
+
+        // ศัตรูที่ลากใส่ไว้: เส้นสีแดงไปหา
+        bool hasLinked = false;
+        if (linkedEnemies != null)
+        {
+            Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.9f);
+            foreach (AlertState enemy in linkedEnemies)
+            {
+                if (enemy == null) continue;
+                hasLinked = true;
+                Gizmos.DrawLine(pivot.position, enemy.transform.position + Vector3.up);
+            }
+        }
+
+        if (!hasLinked && room == null)
+        {
+            Gizmos.color = new Color(1f, 0.3f, 0f, 0.6f);
+            Gizmos.DrawWireSphere(pivot.position, alertRadius);
+        }
     }
 }

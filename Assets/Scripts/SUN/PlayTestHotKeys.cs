@@ -6,8 +6,9 @@ public class PlaytestResetHotkey : MonoBehaviour
 {
     public static PlaytestResetHotkey Instance { get; private set; }
 
-    const string MainMenuScene = SceneNames.MainMenu;
-    const string Level0Scene = SceneNames.Tutorial;
+    // ชื่อ Scene มาจาก SceneFlow.asset (เดิมเป็นค่าคงที่ จึงต้องเปลี่ยนเป็น property) ปุ่มและการทำงานเหมือนเดิม
+    static string MainMenuScene => SceneNames.MainMenu;
+    static string Level0Scene => SceneNames.Tutorial;
 
     [Header("Playtest Keys")]
     public Key resetToMainMenuKey = Key.L;

@@ -15,10 +15,25 @@ public class PlayerHealth : MonoBehaviour
     private Quaternion spawnRotation;
     private bool isDead;
     private CharacterController characterController;
+
+    /// <summary>ผู้เล่นตายอยู่ตอนนี้ไหม (ศัตรูใช้เช็กเพื่อหยุดยิง/หยุดไล่)</summary>
+    public static bool PlayerIsDead { get; private set; }
+
+    /// <summary>เรียกครั้งเดียวตอนผู้เล่นตาย</summary>
+    public static event System.Action Died;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        PlayerIsDead = false;
+        Died = null;
+    }
     private TopDownPlayerController movementController;
 
     void Start()
     {
+        PlayerIsDead = false; // เริ่ม Scene ใหม่ / โหลดใหม่หลังตาย
+
         // เคารพค่า Max Health ที่ตั้งใน Inspector (เดิมถูกเขียนทับด้วย health เสมอ)
         if (maxHealth <= 0f)
             maxHealth = health;
@@ -72,6 +87,7 @@ public class PlayerHealth : MonoBehaviour
     public void Respawn()
     {
         isDead = false;
+        PlayerIsDead = false;
         health = maxHealth;
 
         if (characterController != null)
@@ -94,7 +110,9 @@ public class PlayerHealth : MonoBehaviour
     private void Die()
     {
         isDead = true;
+        PlayerIsDead = true;
         health = 0f;
+        Died?.Invoke();
 
         if (movementController != null)
             movementController.SetMovementLocked(this, true);

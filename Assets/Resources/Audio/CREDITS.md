@@ -16,6 +16,12 @@ Downloaded 2026-11-15. Files were renamed only (no editing) so `SfxLibrary` can 
 
 | File in this project | Pack | Original file |
 |---|---|---|
+| door_open_1.ogg | RPG Audio | doorOpen_1.ogg |
+| door_open_2.ogg | RPG Audio | doorOpen_2.ogg |
+| door_close_1.ogg | RPG Audio | doorClose_1.ogg |
+| door_close_2.ogg | RPG Audio | doorClose_2.ogg |
+| door_close_3.ogg | RPG Audio | doorClose_3.ogg |
+| door_close_4.ogg | RPG Audio | doorClose_4.ogg |
 | footstep_1.ogg | Impact Sounds | footstep_concrete_000.ogg |
 | footstep_2.ogg | Impact Sounds | footstep_concrete_001.ogg |
 | footstep_3.ogg | Impact Sounds | footstep_concrete_002.ogg |

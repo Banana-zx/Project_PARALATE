@@ -2920,6 +2920,7 @@ GameObject:
   - component: {fileID: 1732800998264852422}
   - component: {fileID: 2583355634869623309}
   - component: {fileID: 4159014877402975217}
+  - component: {fileID: 3492048469313611499}
   m_Layer: 5
   m_Name: Alerting
   m_TagString: Untagged
@@ -2974,7 +2975,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: -NOT WORKING ALERT STATE-
+  m_text: ENEMY IS ALERTED
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: bea8c347ca30b444699ec06b01bbfafd, type: 2}
   m_sharedMaterial: {fileID: -8307651945098570778, guid: bea8c347ca30b444699ec06b01bbfafd, type: 2}
@@ -2984,7 +2985,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+  m_fontColor: {r: 1, g: 0.2, b: 0.2, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -3046,6 +3047,26 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!114 &3492048469313611499
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8291695914495789269}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2f9923e12598f194fb22fab1b87e955a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AlertBanner
+  message: ENEMY IS ALERTED
+  color: {r: 1, g: 0.2, b: 0.2, a: 1}
+  mode: 1
+  displaySeconds: 3
+  nearbyRadius: 0
+  lingerSeconds: 0.5
+  fadeTime: 0.2
+  pulseSpeed: 4
 --- !u!1 &8390569166202222005
 GameObject:
   m_ObjectHideFlags: 0

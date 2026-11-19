@@ -115,8 +115,31 @@ public class EnemyShooting : MonoBehaviour
     {
         FindPlayerTarget();
     }
+    private void OnEnable()
+    {
+        PlayerHealth.Died += StopShooting;
+    }
+
+    /// <summary>ผู้เล่นตาย: ยกเลิกท่าเล็ง/ยิงที่ค้างอยู่ทันที</summary>
+    private void StopShooting()
+    {
+        if (shootRoutine != null)
+        {
+            StopCoroutine(shootRoutine);
+            shootRoutine = null;
+        }
+
+        isShootingRoutineRunning = false;
+
+        if (enemyController != null)
+            enemyController.SetMovementLocked(this, false);
+    }
+
     private void Update()
     {
+        if (PlayerHealth.PlayerIsDead)
+            return;
+
         FindPlayerTarget();
 
         if (playerTransform == null || isShootingRoutineRunning)
@@ -141,7 +164,7 @@ public class EnemyShooting : MonoBehaviour
     {
         FindPlayerTarget();
 
-        if (!isActiveAndEnabled || playerTransform == null || isShootingRoutineRunning)
+        if (!isActiveAndEnabled || playerTransform == null || isShootingRoutineRunning || PlayerHealth.PlayerIsDead)
             return false;
 
         if (Time.time < lastFireTime + fireCooldown)
@@ -168,7 +191,7 @@ public class EnemyShooting : MonoBehaviour
             timer += Time.deltaTime;
             yield return null;
         }
-        if (HasClearLineOfSight())
+        if (!PlayerHealth.PlayerIsDead && HasClearLineOfSight())
         {
             SpawnBulletFromPool();
             lastFireTime = Time.time;
@@ -279,16 +302,8 @@ public class EnemyShooting : MonoBehaviour
     }
     private void OnDisable()
     {
-        if (shootRoutine != null)
-        {
-            StopCoroutine(shootRoutine);
-            shootRoutine = null;
-        }
-
-        isShootingRoutineRunning = false;
-
-        if (enemyController != null)
-            enemyController.SetMovementLocked(this, false);
+        PlayerHealth.Died -= StopShooting;
+        StopShooting();
     }
     private void OnDestroy()
     {

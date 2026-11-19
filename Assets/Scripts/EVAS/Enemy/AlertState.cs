@@ -83,8 +83,57 @@ public class AlertState : MonoBehaviour
     //public bool IsCountingAlertPoint => isCountingAlertPoint;
     public bool IsAlert => currentState == AlertAIState.Alert || currentState == AlertAIState.Chasing;
 
+    // ---- ให้ระบบอื่น (เช่น ป้าย ENEMY IS ALERTED) รู้สถานะศัตรูโดยไม่ต้องค้นทั้ง Scene ทุกเฟรม ----
+    private static readonly System.Collections.Generic.List<AlertState> active = new System.Collections.Generic.List<AlertState>();
+
+    /// <summary>ศัตรูทุกตัวที่ AlertState เปิดอยู่ใน Scene</summary>
+    public static System.Collections.Generic.IReadOnlyList<AlertState> Active => active;
+
+    /// <summary>ศัตรูตัวหนึ่งเพิ่งเข้าสถานะ Alert/Chasing (จากสถานะที่ไม่ใช่ Alert)</summary>
+    public static event System.Action<AlertState> AlertStarted;
+
+    private EnemyHealth health;
+
+    /// <summary>กำลัง Alert และยังไม่ตาย</summary>
+    public bool IsAlertAndAlive => IsAlert && (health == null || !health.IsDead);
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        active.Clear();
+        AlertStarted = null;
+    }
+
+    private void OnEnable()
+    {
+        if (!active.Contains(this))
+            active.Add(this);
+
+        PlayerHealth.Died += HandlePlayerDied;
+    }
+
+    private void OnDisable()
+    {
+        active.Remove(this);
+        PlayerHealth.Died -= HandlePlayerDied;
+    }
+
+    // ผู้เล่นตาย: เลิกไล่ล่า/เลิกต่อสู้ กลับไปเดินลาดตระเวน
+    private void HandlePlayerDied()
+    {
+        if (currentState == AlertAIState.Neutral)
+            return;
+
+        bool wasChasing = currentState == AlertAIState.Chasing;
+        ResetAlert();
+
+        if (wasChasing)
+            enemyController?.StopChase();
+    }
+
     private void Awake()
     {
+        health = GetComponent<EnemyHealth>();
         CacheReferences();
     }
 
@@ -93,6 +142,10 @@ public class AlertState : MonoBehaviour
         UpdateRuntimeDebugValues();
 
         if (fieldOfView == null || fieldOfView.playerRef == null)
+            return;
+
+        // ผู้เล่นตายแล้ว: เห็นศพไม่นับเป็นการเจอผู้เล่น
+        if (PlayerHealth.PlayerIsDead)
             return;
 
         if (fieldOfView.canSeePlayer)
@@ -165,8 +218,38 @@ public class AlertState : MonoBehaviour
 
     public void ReceiveReinforcement(Vector3 sourcePosition)
     {
+        if (PlayerHealth.PlayerIsDead)
+            return;
+
         lastKnownPlayerPosition = sourcePosition;
         if (!IsAlert) EnterAlert();
+    }
+
+    /// <summary>
+    /// รายงานจาก "ตาภายนอก" (เช่น กล้องวงจรปิด) ว่าเห็นผู้เล่นอยู่ตอนนี้:
+    /// เข้า Alert แล้วไล่ล่าผู้เล่นทันทีอย่างน้อย minimumChaseTime วินาที เหมือนศัตรูเห็นเอง
+    /// เติมแต้มให้เต็ม เพื่อไม่ให้ระบบลดแต้ม (Return) รีเซ็ตกลับ Neutral ทันทีที่ตัวเองยังไม่เห็นผู้เล่น
+    /// </summary>
+    public void ReceiveSpotterReport(Vector3 playerPosition, float minimumChaseTime)
+    {
+        if ((health != null && health.IsDead) || PlayerHealth.PlayerIsDead)
+            return;
+
+        lastKnownPlayerPosition = playerPosition;
+        neutralPoint = neutralToSuspiciousPoint;
+        suspiciousPoint = suspiciousToAlertPoint;
+        returnDecreaseTimer = 0f;
+
+        if (!IsAlert)
+        {
+            SetState(AlertAIState.Alert);
+            paranoidLevel++;
+            enemyAudio?.PlayAlertSound();
+        }
+
+        SetState(AlertAIState.Chasing);
+        GetComponent<GoapAgent>()?.SetCombatActive(true);
+        enemyController?.StartChase(minimumChaseTime);
     }
 
     public void EnterReturnState()
@@ -401,7 +484,11 @@ public class AlertState : MonoBehaviour
             return;
 
         AlertAIState previousState = currentState;
+        bool wasAlert = IsAlert;
         currentState = state;
+
+        if (!wasAlert && IsAlert)
+            AlertStarted?.Invoke(this);
 
         if (logStateChanges)
             Debug.Log($"{name} Alert State: {previousState} -> {currentState}", this);
