@@ -186,7 +186,7 @@ public static class ParalateSetup
 
         Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
 
-        if (Object.FindFirstObjectByType<UpgradeTerminal>(FindObjectsInactive.Include) != null)
+        if (Object.FindAnyObjectByType<UpgradeTerminal>(FindObjectsInactive.Include) != null)
             return;
 
         GameObject target = GameObject.Find("Upgrade");
@@ -218,7 +218,7 @@ public static class ParalateSetup
         if (GameObject.Find("XGearTestItems") != null)
             return;
 
-        TopDownPlayerController player = Object.FindFirstObjectByType<TopDownPlayerController>(FindObjectsInactive.Include);
+        TopDownPlayerController player = Object.FindAnyObjectByType<TopDownPlayerController>(FindObjectsInactive.Include);
         if (player == null)
         {
             Debug.LogWarning("[ParalateSetup] HideOut: ไม่พบผู้เล่น จึงไม่ได้วางของทดสอบ");
@@ -241,7 +241,7 @@ public static class ParalateSetup
         }
 
         GameObject sniper = AssetDatabase.LoadAssetAtPath<GameObject>(SniperPrefabPath);
-        if (sniper != null && Object.FindObjectsByType<GunAction>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length > 0)
+        if (sniper != null && Object.FindObjectsByType<GunAction>(FindObjectsInactive.Include).Length > 0)
             Place(sniper, group.transform, start + origin.right * (index * 0.9f) + Vector3.up * 0.5f);
 
         EditorSceneManager.MarkSceneDirty(scene);
@@ -266,7 +266,7 @@ public static class ParalateSetup
         Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
         bool changed = false;
 
-        TopDownPlayerController player = Object.FindFirstObjectByType<TopDownPlayerController>(FindObjectsInactive.Include);
+        TopDownPlayerController player = Object.FindAnyObjectByType<TopDownPlayerController>(FindObjectsInactive.Include);
         if (player != null)
         {
             GameObject playerObject = player.gameObject;

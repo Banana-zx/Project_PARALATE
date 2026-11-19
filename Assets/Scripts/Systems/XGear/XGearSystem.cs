@@ -7,13 +7,18 @@ using UnityEngine.UI;
 /// <summary>
 /// X-Gear: แขนกลที่ติดตัวผู้เล่นตั้งแต่เริ่มเกม มี 3 ช่อง (ตั้งค่าที่ Upgrade Corner ใน Base, เก็บใน XGearLoadout)
 ///   Passive : ใส่แล้วได้ผลอัตโนมัติตลอด (FleetFoot = ย่อเดินเร็วขึ้น 5%)
-///   Active  : เปลี่ยนมาถือ X-Gear แล้วคลิกซ้ายเพื่อใช้ ใช้ได้ 1 ครั้งต่อด่าน (ขีดสีฟ้ามุมซ้ายบน)
+///   Active  : เปลี่ยนมาถือ X-Gear แล้วคลิกซ้ายเพื่อใช้ ใช้ได้ maxCharges ครั้งต่อด่าน (ขีดสีฟ้ามุมซ้ายบน)
+///             เก็บ X-Gear Cell ในด่านเพื่อเติมทีละหน่วย (ไม่เกิน maxCharges)
 ///   Map     : ใส่ Map Data ของด่านไหน เข้าด่านนั้นจะมี Minimap ทั้งแผนที่ + ศัตรู
 /// คอมโพเนนต์นี้ถูกเพิ่มให้ผู้เล่นอัตโนมัติ (PlayerSystems) ไม่ต้องแก้ Prefab
 /// </summary>
 [DisallowMultipleComponent]
 public class XGearSystem : MonoBehaviour
 {
+    [Header("Charges")]
+    [Tooltip("จำนวนครั้งสูงสุดที่ใช้ Active Chip ได้ (เริ่มด่านมาเต็มเท่านี้ / X-Gear Cell เติมได้ไม่เกินนี้)")]
+    [Min(1)] public int maxCharges = 1;
+
     [Header("Active Chip : Invisible")]
     public float invisibleDuration = 5f;
 
@@ -38,6 +43,7 @@ public class XGearSystem : MonoBehaviour
     private Renderer[] bodyRenderers;
 
     public int Charges => charges;
+    public int MaxCharges => Mathf.Max(1, maxCharges);
     public bool IsInvisible => isInvisible;
 
     private void Awake()
@@ -75,9 +81,14 @@ public class XGearSystem : MonoBehaviour
         if (controller != null)
             controller.CrouchSpeedMultiplier = XGearLoadout.PassiveId == ItemCatalog.ChipFleetFoot ? fleetFootCrouchMultiplier : 1f;
 
-        // Active: 1 ครั้งต่อด่าน (คอมโพเนนต์นี้อยู่บนผู้เล่นของ Scene จึงรีเซ็ตเองเมื่อโหลดด่านใหม่)
-        if (!usedThisMission)
-            charges = string.IsNullOrEmpty(XGearLoadout.ActiveId) ? 0 : 1;
+        // Active: เริ่มด่านมาเต็ม maxCharges (คอมโพเนนต์นี้อยู่บนผู้เล่นของ Scene จึงรีเซ็ตเองเมื่อโหลดด่านใหม่)
+        bool hasChip = !string.IsNullOrEmpty(XGearLoadout.ActiveId);
+        if (!hasChip)
+            charges = 0;
+        else if (!usedThisMission)
+            charges = MaxCharges;
+        else
+            charges = Mathf.Min(charges, MaxCharges);
 
         ApplyMap();
         RefreshChargeBar();
@@ -146,6 +157,28 @@ public class XGearSystem : MonoBehaviour
         return true;
     }
 
+    /// <summary>เติม X-Gear (X-Gear Cell) คืน false ถ้าไม่มี Active Chip หรือเต็มแล้ว (ไอเทมจะไม่ถูกใช้)</summary>
+    public bool AddCharges(int amount, out string reason)
+    {
+        reason = null;
+
+        if (string.IsNullOrEmpty(XGearLoadout.ActiveId))
+        {
+            reason = "No Active Chip installed";
+            return false;
+        }
+
+        if (charges >= MaxCharges)
+        {
+            reason = "X-Gear charges full";
+            return false;
+        }
+
+        charges = Mathf.Min(charges + Mathf.Max(1, amount), MaxCharges);
+        RefreshChargeBar();
+        return true;
+    }
+
     private void SetInvisible(bool value)
     {
         if (isInvisible == value)
@@ -174,7 +207,7 @@ public class XGearSystem : MonoBehaviour
     private void FindOrBuildChargeBar()
     {
         // ใช้แถบ XN(Mana) ที่มีอยู่ใน MainHUD ถ้ามี
-        Image[] images = FindObjectsByType<Image>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        Image[] images = FindObjectsByType<Image>(FindObjectsInactive.Include);
         for (int i = 0; i < images.Length; i++)
         {
             if (images[i].name == "XN(Mana)_Filled")
@@ -215,8 +248,9 @@ public class XGearSystem : MonoBehaviour
         if (!hasChip)
             return;
 
-        // มีขีด = ยังใช้ได้ / ระหว่างล่องหนขีดจะหดตามเวลาที่เหลือ / ใช้แล้ว = ขีดหาย
-        float fraction = isInvisible ? Mathf.Clamp01((invisibleUntil - Time.time) / invisibleDuration) : (charges > 0 ? 1f : 0f);
+        // ความยาวขีด = จำนวนครั้งที่เหลือ / สูงสุด, ระหว่างล่องหนครั้งที่กำลังใช้หดตามเวลาที่เหลือ
+        float running = isInvisible ? Mathf.Clamp01((invisibleUntil - Time.time) / invisibleDuration) : 0f;
+        float fraction = Mathf.Clamp01((charges + running) / MaxCharges);
         chargeFill.color = chargeColor;
         chargeFill.enabled = fraction > 0f;
         chargeFill.transform.localScale = new Vector3(fraction, 1f, 1f);
@@ -226,7 +260,7 @@ public class XGearSystem : MonoBehaviour
 
     private void ApplyMap()
     {
-        MinimapManager manager = FindFirstObjectByType<MinimapManager>(FindObjectsInactive.Include);
+        MinimapManager manager = FindAnyObjectByType<MinimapManager>(FindObjectsInactive.Include);
         if (manager == null)
             return; // Scene นี้ไม่มี Minimap
 
@@ -239,7 +273,7 @@ public class XGearSystem : MonoBehaviour
         if (mapRoot != null && mapRoot.GetComponent<Canvas>() == null)
             mapRoot.gameObject.SetActive(hasMap);
 
-        MinimapCameraFollow follow = FindFirstObjectByType<MinimapCameraFollow>(FindObjectsInactive.Include);
+        MinimapCameraFollow follow = FindAnyObjectByType<MinimapCameraFollow>(FindObjectsInactive.Include);
         Camera mapCamera = follow != null ? follow.GetComponent<Camera>() : null;
         if (mapCamera == null)
             return;

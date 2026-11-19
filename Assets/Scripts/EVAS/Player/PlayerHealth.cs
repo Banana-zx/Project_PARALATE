@@ -55,6 +55,20 @@ public class PlayerHealth : MonoBehaviour
             Die();
     }
 
+    public bool IsDead => isDead;
+    public bool IsFull => health >= maxHealth;
+
+    /// <summary>เพิ่มเลือด (ไม่เกิน maxHealth) คืน false ถ้าตายอยู่หรือเลือดเต็มแล้ว (ไอเทมจะไม่ถูกใช้)</summary>
+    public bool Heal(float amount)
+    {
+        if (isDead || amount <= 0f || health >= maxHealth)
+            return false;
+
+        health = Mathf.Min(health + amount, maxHealth);
+        UpdateHealthBar();
+        return true;
+    }
+
     public void Respawn()
     {
         isDead = false;

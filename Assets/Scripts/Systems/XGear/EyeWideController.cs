@@ -10,9 +10,6 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public class EyeWideController : MonoBehaviour
 {
-    [Header("Input")]
-    public Key toggleKey = Key.T;
-
     [Header("Camera")]
     [Tooltip("ใช้เมื่อโมเดลไม่มีกระดูก Head (ไม่ใช่ Humanoid): ตำแหน่งตาเทียบกับเท้าผู้เล่น")]
     public Vector3 eyeOffset = new Vector3(0f, 1.4f, 0.18f);
@@ -42,6 +39,7 @@ public class EyeWideController : MonoBehaviour
     public float zoomSoundFade = 0.08f;
 
     private TopDownPlayerController controller;
+    private PlayerInput playerInput;
     private Transform body; // ตัวผู้เล่น (ใช้วัดตำแหน่ง/ทิศ) คอมโพเนนต์นี้อยู่บนวัตถุลูก "EyeWide" ของผู้เล่นได้
     private PickupSystem pickup;
     private WeaponWheelUI wheel;
@@ -67,6 +65,7 @@ public class EyeWideController : MonoBehaviour
 
         // หาจากตัวเองขึ้นไปหาพ่อ: วางคอมโพเนนต์นี้บนวัตถุลูกของ Player (เช่น "EyeWide") แล้วปรับค่าใน Inspector ได้
         controller = GetComponentInParent<TopDownPlayerController>();
+        playerInput = GetComponentInParent<PlayerInput>();
         pickup = GetComponentInParent<PickupSystem>();
         wheel = GetComponentInParent<WeaponWheelUI>();
         body = controller != null ? controller.transform : transform;
@@ -74,13 +73,12 @@ public class EyeWideController : MonoBehaviour
 
     private void Update()
     {
-        Keyboard keyboard = Keyboard.current;
-        if (keyboard == null)
-            return;
+        // ปุ่มอยู่ใน PlayerInput.inputactions: EyeWide (T) / Pause (Esc)
+        bool toggle = PlayerControls.WasPressed(PlayerControls.EyeWide, Key.T, playerInput);
 
         if (active)
         {
-            if (keyboard[toggleKey].wasPressedThisFrame || keyboard.escapeKey.wasPressedThisFrame)
+            if (toggle || PlayerControls.WasPressed(PlayerControls.Pause, Key.Escape, playerInput))
             {
                 Exit();
                 return;
@@ -91,7 +89,7 @@ public class EyeWideController : MonoBehaviour
             return;
         }
 
-        if (keyboard[toggleKey].wasPressedThisFrame && CanEnter())
+        if (toggle && CanEnter())
             Enter();
     }
 
@@ -156,26 +154,27 @@ public class EyeWideController : MonoBehaviour
 
     private void HandleLook()
     {
-        Vector2 delta = Mouse.current != null ? Mouse.current.delta.ReadValue() : Vector2.zero;
-
         // ซูมมากแล้วหมุนช้าลงตามสัดส่วน จะได้เล็งดูของไกลๆ ได้นิ่ง
         float zoomFactor = Mathf.Clamp(eyeCamera.Lens.FieldOfView / defaultFov, 0.2f, 1.25f);
 
-        yaw += delta.x * mouseSensitivity * zoomFactor;
+        // CameraLook (เมาส์ขยับ / right stick) ค่าที่ได้เป็นองศาแล้ว
+        Vector2 delta = PlayerControls.ReadLook(mouseSensitivity * zoomFactor, 120f * zoomFactor, playerInput);
+
+        yaw += delta.x;
 
         // จำกัดมุมหันซ้าย/ขวา: คิดเป็น "ส่วนต่างจากทิศตอนเข้าโหมด" แล้วค่อยหนีบ (DeltaAngle กันปัญหาข้าม 0/360)
         if (maxLookSide < 179.9f)
             yaw = baseYaw + Mathf.Clamp(Mathf.DeltaAngle(baseYaw, yaw), -maxLookSide, maxLookSide);
 
         // pitch เป็นบวก = ก้ม, ลบ = เงย (ตามแกน X ของ Unity)
-        pitch = Mathf.Clamp(pitch - delta.y * mouseSensitivity * zoomFactor, -maxLookUp, maxLookDown);
+        pitch = Mathf.Clamp(pitch - delta.y, -maxLookUp, maxLookDown);
 
         UpdateCameraPose();
     }
 
     private void HandleZoom()
     {
-        float scroll = Mouse.current != null ? Mouse.current.scroll.ReadValue().y : 0f;
+        float scroll = PlayerControls.ReadZoom(playerInput);
 
         if (Mathf.Abs(scroll) > 0.01f)
         {

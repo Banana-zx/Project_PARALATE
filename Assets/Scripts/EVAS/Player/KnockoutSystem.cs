@@ -67,7 +67,7 @@ public class KnockoutSystem : MonoBehaviour
     void Start()
     {
         if (promptUI == null)
-            promptUI = FindFirstObjectByType<KnockoutPromptUI>(FindObjectsInactive.Include);
+            promptUI = FindAnyObjectByType<KnockoutPromptUI>(FindObjectsInactive.Include);
     }
 
     void OnDisable()

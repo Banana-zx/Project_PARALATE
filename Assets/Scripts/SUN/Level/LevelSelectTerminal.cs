@@ -18,7 +18,7 @@ public class LevelSelectTerminal : MonoBehaviour, IInteractable
     public void Interact(GameObject interactor)
     {
         if (ui == null)
-            ui = FindFirstObjectByType<LevelSelectUI>(FindObjectsInactive.Include);
+            ui = FindAnyObjectByType<LevelSelectUI>(FindObjectsInactive.Include);
 
         if (ui != null && !ui.IsOpen)
             ui.Open();

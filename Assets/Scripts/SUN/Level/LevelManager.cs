@@ -261,7 +261,7 @@ public class LevelManager : MonoBehaviour
         pendingSpawnId = null;
         CheckpointSpawnId = null;
 
-        TopDownPlayerController player = FindFirstObjectByType<TopDownPlayerController>();
+        TopDownPlayerController player = FindAnyObjectByType<TopDownPlayerController>();
         if (player == null)
             return;
 
@@ -276,7 +276,7 @@ public class LevelManager : MonoBehaviour
     // กด Play จาก Scene ด่านโดยตรง (ตอนทดสอบ): ไม่ย้ายผู้เล่น แต่ใช้จุดที่ใกล้ที่สุดเป็น Checkpoint
     private void RegisterStartingCheckpoint(Scene scene)
     {
-        TopDownPlayerController player = FindFirstObjectByType<TopDownPlayerController>();
+        TopDownPlayerController player = FindAnyObjectByType<TopDownPlayerController>();
         if (player == null)
             return;
 
@@ -324,7 +324,7 @@ public class LevelManager : MonoBehaviour
     {
         SetTransitioning(true);
 
-        TopDownPlayerController player = FindFirstObjectByType<TopDownPlayerController>();
+        TopDownPlayerController player = FindAnyObjectByType<TopDownPlayerController>();
         if (player != null)
             player.SetMovementLocked(this, true);
 

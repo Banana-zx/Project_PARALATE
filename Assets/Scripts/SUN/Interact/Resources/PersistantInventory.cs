@@ -180,6 +180,7 @@ public class PersistentInventory : MonoBehaviour
         PlayerPrefs.DeleteKey(SaveKey);
         XGearLoadout.ResetSave();
         WeaponUpgrades.ResetSave();
+        GameLog.ResetSave();
         PlayerPrefs.Save();
         Debug.Log("Reset inventory / X-Gear / weapon upgrade save แล้ว");
     }

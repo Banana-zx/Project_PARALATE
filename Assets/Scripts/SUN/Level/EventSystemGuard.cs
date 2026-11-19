@@ -30,7 +30,7 @@ public static class EventSystemGuard
 
     private static void EnsureEventSystem()
     {
-        if (Object.FindFirstObjectByType<EventSystem>() != null)
+        if (Object.FindAnyObjectByType<EventSystem>() != null)
             return;
 
         GameObject go = new GameObject("EventSystem (Auto)");
@@ -45,7 +45,7 @@ public static class EventSystemGuard
 
     private static void DisableDuplicateEventSystems(Scene addedScene)
     {
-        EventSystem[] all = Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None);
+        EventSystem[] all = Object.FindObjectsByType<EventSystem>();
 
         bool hostHasOne = false;
         for (int i = 0; i < all.Length; i++)

@@ -90,7 +90,7 @@ public class WeaponWheelUI : MonoBehaviour
         // กล่อง WeaponHUD เดิมของ MainHUD: ซ่อนถาวร HUD นี้แสดงแทนทั้งหมด
         AmmoUIManager oldHud = pickupSystem != null && pickupSystem.ammoUIManager != null
             ? pickupSystem.ammoUIManager
-            : FindFirstObjectByType<AmmoUIManager>(FindObjectsInactive.Include);
+            : FindAnyObjectByType<AmmoUIManager>(FindObjectsInactive.Include);
 
         if (oldHud != null)
             oldHud.SetSuppressed(true);

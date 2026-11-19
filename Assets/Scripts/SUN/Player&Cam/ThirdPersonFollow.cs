@@ -56,6 +56,7 @@ public class ThirdPersonFollowCamera : MonoBehaviour
     public bool hubMode = true;
 
     private TopDownPlayerController controller;
+    private PlayerInput playerInput;
     private Vector3 pivotVelocity;
     private Vector3 smoothedPivot;
     private float yawVelocity;
@@ -70,6 +71,7 @@ public class ThirdPersonFollowCamera : MonoBehaviour
             return;
 
         controller = player.GetComponent<TopDownPlayerController>();
+        playerInput = player.GetComponent<PlayerInput>();
         currentYaw = player.eulerAngles.y;
         currentPitch = Mathf.Clamp(pitch, minPitch, maxPitch);
         currentDistance = distance;
@@ -152,13 +154,8 @@ public class ThirdPersonFollowCamera : MonoBehaviour
             return;
         }
 
-        Vector2 look = Vector2.zero;
-
-        if (Mouse.current != null)
-            look += Mouse.current.delta.ReadValue() * mouseSensitivity;
-
-        if (Gamepad.current != null)
-            look += Gamepad.current.rightStick.ReadValue() * (gamepadSensitivity * Time.deltaTime);
+        // CameraLook ใน PlayerInput.inputactions (เมาส์ขยับ / right stick) ค่าที่ได้เป็นองศาแล้ว
+        Vector2 look = PlayerControls.ReadLook(mouseSensitivity, gamepadSensitivity, playerInput);
 
         currentYaw += look.x;
         currentPitch = Mathf.Clamp(currentPitch + (invertY ? look.y : -look.y), minPitch, maxPitch);

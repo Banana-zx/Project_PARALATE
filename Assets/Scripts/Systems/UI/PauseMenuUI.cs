@@ -5,25 +5,30 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 /// <summary>
-/// เมนูตอนกด Esc ในเกม (สร้างด้วยโค้ด ทุก Scene ที่มีผู้เล่น): Portrait ซ้าย / เนื้อหากลาง / เมนูขวา
+/// เมนูตอนกด Esc ในเกม (สร้างด้วยโค้ด ทุก Scene ที่มีผู้เล่น): เนื้อหาซ้าย / เมนูขวา (กึ่งกลางจอ)
 ///   Equipment : 3 ช่อง Primary / Secondary / X-Gear — ชี้เมาส์มีกล่องอธิบายด้านขวา, คลิกขวา = ถอดเข้า Inventory
 ///   Inventory : ตารางช่องของ (กระสุน, Scrap, Metal, ชิป, อาวุธที่ถอดเก็บ) — คลิกซ้ายอาวุธ = ใส่กลับเข้าช่อง
+///   Logs      : Memo กดหัวข้อเพื่อเปิดอ่านคำอธิบาย เลื่อนขึ้นลงได้ (ข้อมูลใน GameLog / Resources/Logs)
 ///   Setting   : Fullscreen + เสียง Main / Music / SFX
 ///   Exit      : ถามยืนยัน Yes / No
 /// เปิดเมนู = หยุดเวลา (Time.timeScale = 0) และล็อกผู้เล่นด้วยระบบล็อกแบบมีเจ้าของ
 /// </summary>
 public class PauseMenuUI : MonoBehaviour
 {
-    private enum Page { Equipment, Inventory, Setting, Exit }
+    private enum Page { Equipment, Inventory, Logs, Setting, Exit }
 
-    private static readonly string[] PageNames = { "equipment", "inventory", "setting", "exit" };
+    private static readonly string[] PageNames = { "equipment", "inventory", "logs", "setting", "exit" };
 
     private TopDownPlayerController player;
     private PickupSystem pickup;
 
     private GameObject root;
     private RectTransform content;
-    private readonly Button[] navButtons = new Button[4];
+    private readonly Button[] navButtons = new Button[5];
+
+    // หน้า Logs
+    private ScrollRect logScroll;
+    private RectTransform logContent;
     private Image tooltip;
     private TextMeshProUGUI tooltipText;
 
@@ -32,14 +37,12 @@ public class PauseMenuUI : MonoBehaviour
     private bool lockedLastFrame;
     private float timeScaleBeforePause = 1f;
 
-    [Tooltip("ปุ่มลัดเปิดเมนูที่หน้า Inventory ทันที")]
-    public Key inventoryHotkey = Key.B;
 
     public bool IsOpen => isOpen;
 
     public static void EnsureInScene(TopDownPlayerController player)
     {
-        if (player == null || FindFirstObjectByType<PauseMenuUI>() != null)
+        if (player == null || FindAnyObjectByType<PauseMenuUI>() != null)
             return;
 
         GameObject go = new GameObject("PauseMenu (Auto)");
@@ -52,12 +55,14 @@ public class PauseMenuUI : MonoBehaviour
     {
         PersistentInventory.OnChanged += RefreshIfOpen;
         RunInventory.OnChanged += RefreshIfOpen;
+        GameLog.OnUnlocked += HandleLogUnlocked;
     }
 
     private void OnDisable()
     {
         PersistentInventory.OnChanged -= RefreshIfOpen;
         RunInventory.OnChanged -= RefreshIfOpen;
+        GameLog.OnUnlocked -= HandleLogUnlocked;
 
         if (isOpen)
             Close();
@@ -65,9 +70,9 @@ public class PauseMenuUI : MonoBehaviour
 
     private void Update()
     {
-        Keyboard keyboard = Keyboard.current;
-        bool escape = keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
-        bool inventoryKey = keyboard != null && keyboard[inventoryHotkey].wasPressedThisFrame;
+        // ปุ่มอยู่ใน PlayerInput.inputactions: Pause (Esc) / Inventory (B)
+        bool escape = PlayerControls.WasPressed(PlayerControls.Pause, Key.Escape);
+        bool inventoryKey = PlayerControls.WasPressed(PlayerControls.Inventory, Key.B);
 
         if (!escape && !inventoryKey)
             return;
@@ -168,19 +173,14 @@ public class PauseMenuUI : MonoBehaviour
         Image dim = UIBuilder.Panel("Dim", root.transform, UIBuilder.DimColor);
         UIBuilder.Stretch(dim.rectTransform);
 
-        // Portrait ซ้าย
-        Image portrait = UIBuilder.Panel("Portrait", root.transform, UIBuilder.WindowColor, false);
-        UIBuilder.Place(portrait.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-610f, 0f), new Vector2(340f, 720f));
-        UIPortrait.Build(portrait.transform, "UI/player_portrait");
-
-        // เนื้อหากลาง
+        // เนื้อหา (ซ้าย) + เมนู (ขวา) กว้างรวม 780 + 10 + 300 = 1090 วางกึ่งกลางจอ
         Image window = UIBuilder.Panel("Content", root.transform, UIBuilder.WindowColor);
-        UIBuilder.Place(window.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-30f, 0f), new Vector2(780f, 720f));
+        UIBuilder.Place(window.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-155f, 0f), new Vector2(780f, 720f));
         content = UIBuilder.Stretch(UIBuilder.Rect("Inner", window.transform), 30f, 30f, 30f, 30f);
 
         // เมนูขวา (แนวตั้ง มีเส้นคั่นซ้าย)
         Image nav = UIBuilder.Panel("Nav", root.transform, UIBuilder.WindowColor);
-        UIBuilder.Place(nav.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(530f, 0f), new Vector2(300f, 720f));
+        UIBuilder.Place(nav.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(395f, 0f), new Vector2(300f, 720f));
 
         Image divider = UIBuilder.Panel("Divider", nav.transform, new Color(1f, 1f, 1f, 0.5f), false);
         divider.rectTransform.anchorMin = new Vector2(0f, 0f);
@@ -200,6 +200,7 @@ public class PauseMenuUI : MonoBehaviour
         }
 
         TextMeshProUGUI hint = UIBuilder.Text("Hint", nav.transform, "Esc to resume  •  B inventory", 18f, TextAlignmentOptions.Bottom, UIBuilder.MutedText);
+        hint.raycastTarget = false;
         UIBuilder.Stretch(hint.rectTransform, 0f, 16f, 0f, 0f);
 
         // กล่องอธิบาย (Tooltip) สี่เหลี่ยมเล็กด้านขวาของเนื้อหา
@@ -237,11 +238,14 @@ public class PauseMenuUI : MonoBehaviour
     {
         HideTooltip();
         UIBuilder.Clear(content);
+        logScroll = null;
+        logContent = null;
 
         switch (currentPage)
         {
             case Page.Equipment: BuildEquipment(); break;
             case Page.Inventory: BuildInventory(); break;
+            case Page.Logs: BuildLogs(); break;
             case Page.Setting: BuildSetting(); break;
             case Page.Exit: BuildExit(); break;
         }
@@ -477,6 +481,193 @@ public class PauseMenuUI : MonoBehaviour
             button.onClick.AddListener(() => onClick());
             relay.playSounds = true;
         }
+    }
+
+    // ------------------------------------------------------------ Logs (Memo พับเปิดดูได้)
+
+    private static readonly Color LogHeaderColor = new Color(1f, 1f, 1f, 0.08f);
+    private static readonly Color LogHeaderOpenColor = new Color(0.25f, 0.7f, 1f, 0.3f);
+    private static readonly Color LogInfoColor = new Color(0f, 0f, 0f, 0.3f);
+
+    private void BuildLogs()
+    {
+        AddHeader("Logs");
+
+        IReadOnlyList<LogEntryData> all = GameLog.All;
+        List<LogEntryData> unlocked = new List<LogEntryData>();
+        for (int i = 0; i < all.Count; i++)
+        {
+            if (GameLog.IsUnlocked(all[i]))
+                unlocked.Add(all[i]);
+        }
+
+        TextMeshProUGUI count = UIBuilder.Text("Count", content, $"{unlocked.Count} / {all.Count}", 20f,
+            TextAlignmentOptions.TopRight, UIBuilder.MutedText);
+        UIBuilder.Stretch(count.rectTransform, 0f, 0f, 0f, 10f);
+
+        // พื้นที่เลื่อน: ScrollRect + Viewport (ตัดขอบด้วย RectMask2D) + Content ที่สูงตามจำนวนหัวข้อ
+        Image area = UIBuilder.Panel("LogArea", content, new Color(0f, 0f, 0f, 0.001f));
+        UIBuilder.Stretch(area.rectTransform, 0f, 34f, 0f, 60f);
+
+        logScroll = area.gameObject.AddComponent<ScrollRect>();
+        logScroll.horizontal = false;
+        logScroll.vertical = true;
+        logScroll.movementType = ScrollRect.MovementType.Clamped;
+        logScroll.scrollSensitivity = 40f;
+
+        RectTransform viewport = UIBuilder.Stretch(UIBuilder.Rect("Viewport", area.transform), 0f, 0f, 16f, 0f);
+        viewport.gameObject.AddComponent<RectMask2D>();
+        logScroll.viewport = viewport;
+
+        logContent = UIBuilder.Rect("Content", viewport);
+        logContent.anchorMin = new Vector2(0f, 1f);
+        logContent.anchorMax = new Vector2(1f, 1f);
+        logContent.pivot = new Vector2(0.5f, 1f);
+        logContent.anchoredPosition = Vector2.zero;
+        logContent.sizeDelta = Vector2.zero;
+
+        VerticalLayoutGroup column = logContent.gameObject.AddComponent<VerticalLayoutGroup>();
+        column.padding = new RectOffset(0, 0, 0, 12);
+        column.spacing = 10f;
+        column.childControlWidth = true;
+        column.childControlHeight = true;
+        column.childForceExpandWidth = true;
+        column.childForceExpandHeight = false;
+        logContent.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        logScroll.content = logContent;
+
+        // แถบเลื่อนด้านขวา (ลากได้ ซ่อนเองเมื่อไม่ยาวพอให้เลื่อน)
+        Image track = UIBuilder.Panel("Scrollbar", area.transform, new Color(1f, 1f, 1f, 0.05f));
+        track.rectTransform.anchorMin = new Vector2(1f, 0f);
+        track.rectTransform.anchorMax = new Vector2(1f, 1f);
+        track.rectTransform.pivot = new Vector2(1f, 0.5f);
+        track.rectTransform.sizeDelta = new Vector2(10f, 0f);
+        track.rectTransform.anchoredPosition = Vector2.zero;
+        Image handle = UIBuilder.Panel("Handle", track.transform, new Color(1f, 1f, 1f, 0.35f));
+        UIBuilder.Stretch(handle.rectTransform);
+        Scrollbar bar = track.gameObject.AddComponent<Scrollbar>();
+        bar.direction = Scrollbar.Direction.BottomToTop;
+        bar.handleRect = handle.rectTransform;
+        bar.targetGraphic = handle;
+        logScroll.verticalScrollbar = bar;
+        logScroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+
+        if (unlocked.Count == 0)
+        {
+            TextMeshProUGUI empty = UIBuilder.Text("Empty", logContent, "No logs yet.", 22f, TextAlignmentOptions.Center, UIBuilder.MutedText);
+            empty.gameObject.AddComponent<LayoutElement>().minHeight = 80f;
+        }
+
+        for (int i = 0; i < unlocked.Count; i++)
+            AddLogItem(unlocked[i]);
+
+        TextMeshProUGUI hint = UIBuilder.Text("Hint", content, "Click a title to open / close", 18f,
+            TextAlignmentOptions.BottomLeft, UIBuilder.MutedText);
+        UIBuilder.Stretch(hint.rectTransform);
+
+        logScroll.verticalNormalizedPosition = 1f; // เริ่มที่หัวข้อแรก
+    }
+
+    // 1 หัวข้อ = แถบหัวข้อ (กดได้ มีลูกศร ▽) + กล่อง info ใต้แถบ (ซ่อนอยู่ เปิดได้ทีละอัน)
+    private void AddLogItem(LogEntryData entry)
+    {
+        RectTransform item = UIBuilder.Rect("Log_" + entry.id, logContent);
+        VerticalLayoutGroup stack = item.gameObject.AddComponent<VerticalLayoutGroup>();
+        stack.spacing = 0f;
+        stack.childControlWidth = true;
+        stack.childControlHeight = true;
+        stack.childForceExpandWidth = true;
+        stack.childForceExpandHeight = false;
+
+        // แถบหัวข้อ
+        Image header = UIBuilder.Panel("Header", item, LogHeaderColor);
+        header.gameObject.AddComponent<LayoutElement>().preferredHeight = 64f;
+
+        Image outline = UIBuilder.Panel("Accent", header.transform, new Color(1f, 1f, 1f, 0.5f), false);
+        outline.rectTransform.anchorMin = new Vector2(0f, 0f);
+        outline.rectTransform.anchorMax = new Vector2(0f, 1f);
+        outline.rectTransform.offsetMin = Vector2.zero;
+        outline.rectTransform.offsetMax = new Vector2(4f, 0f);
+
+        TextMeshProUGUI title = UIBuilder.Text("Title", header.transform, entry.title, 28f, TextAlignmentOptions.MidlineLeft);
+        title.textWrappingMode = TextWrappingModes.NoWrap;
+        title.overflowMode = TextOverflowModes.Ellipsis;
+        UIBuilder.Stretch(title.rectTransform, 22f, 0f, 130f, 0f);
+
+        TextMeshProUGUI badge = UIBuilder.Text("New", header.transform, "NEW", 16f, TextAlignmentOptions.MidlineRight, UIBuilder.AccentColor);
+        badge.fontStyle = FontStyles.Bold;
+        UIBuilder.Place(badge.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-64f, 0f), new Vector2(60f, 30f));
+        badge.gameObject.SetActive(GameLog.IsNew(entry));
+
+        // ลูกศรสามเหลี่ยม: ชี้ลง = ปิดอยู่, ชี้ขึ้น = เปิดอยู่
+        Image arrow = UIBuilder.Panel("Arrow", header.transform, UIBuilder.TextColor, false);
+        arrow.sprite = UIBuilder.TriangleSprite;
+        UIBuilder.Place(arrow.rectTransform, new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-32f, 0f), new Vector2(22f, 16f));
+
+        // กล่อง info (คำอธิบาย)
+        Image info = UIBuilder.Panel("Info", item, LogInfoColor, false);
+        VerticalLayoutGroup infoLayout = info.gameObject.AddComponent<VerticalLayoutGroup>();
+        infoLayout.padding = new RectOffset(26, 22, 16, 18);
+        infoLayout.childControlWidth = true;
+        infoLayout.childControlHeight = true;
+        infoLayout.childForceExpandWidth = true;
+        infoLayout.childForceExpandHeight = false;
+
+        TextMeshProUGUI body = UIBuilder.Text("Body", info.transform, entry.body, 22f, TextAlignmentOptions.TopLeft);
+        body.richText = true; // ใช้ <b> <color> ในข้อความของไฟล์ Log ได้
+        info.gameObject.SetActive(false);
+
+        Button button = header.gameObject.AddComponent<Button>();
+        button.targetGraphic = header;
+        header.gameObject.AddComponent<UIPointerRelay>().playSounds = true;
+        button.onClick.AddListener(() =>
+        {
+            bool open = !info.gameObject.activeSelf;
+
+            // เปิดได้ทีละหัวข้อ: ปิดอันอื่นก่อน
+            if (open)
+                CollapseAllLogs();
+
+            SetLogItemOpen(header, arrow, info, open);
+
+            if (open)
+            {
+                GameLog.MarkRead(entry);
+                badge.gameObject.SetActive(false);
+            }
+
+            LayoutRebuilder.ForceRebuildLayoutImmediate(logContent);
+        });
+    }
+
+    private static void SetLogItemOpen(Image header, Image arrow, Image info, bool open)
+    {
+        info.gameObject.SetActive(open);
+        header.color = open ? LogHeaderOpenColor : LogHeaderColor;
+        arrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, open ? 180f : 0f);
+    }
+
+    private void CollapseAllLogs()
+    {
+        if (logContent == null)
+            return;
+
+        foreach (Transform item in logContent)
+        {
+            Transform header = item.Find("Header");
+            Transform info = item.Find("Info");
+            if (header == null || info == null)
+                continue;
+
+            SetLogItemOpen(header.GetComponent<Image>(), header.Find("Arrow").GetComponent<Image>(), info.GetComponent<Image>(), false);
+        }
+    }
+
+    private void HandleLogUnlocked(LogEntryData entry)
+    {
+        // ปลดล็อกใหม่ระหว่างเปิดหน้า Logs (เช่นจาก Trigger ตอนเกมไม่หยุด) → สร้างรายการใหม่
+        if (isOpen && currentPage == Page.Logs)
+            Rebuild();
     }
 
     // ------------------------------------------------------------ Setting

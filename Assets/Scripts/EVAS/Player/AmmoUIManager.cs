@@ -62,6 +62,11 @@ public class AmmoUIManager : MonoBehaviour
     {
         suppressed = value;
         RefreshDisplay();
+
+        // ซ่อนทั้งกล่อง (รวมพื้นหลังสีเทาของ WeaponHUD เอง ไม่ใช่แค่ panel ข้างใน)
+        // เมธอดของคอมโพเนนต์ยังเรียกได้ตอนปิดอยู่ ระบบอื่นที่สั่ง SetActiveWeapon จึงไม่พัง
+        if (gameObject.activeSelf == value)
+            gameObject.SetActive(!value);
     }
 
     /// <summary>โชว์ HUD แบบมีแต่ชื่อ (ใช้ตอนถือ X-Gear ที่ไม่ใช่ GameObject อาวุธ) ส่ง null เพื่อปิด</summary>

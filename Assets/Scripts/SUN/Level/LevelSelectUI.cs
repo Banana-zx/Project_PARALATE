@@ -165,7 +165,7 @@ public class LevelSelectUI : MonoBehaviour
         if (!IsOpen)
             return;
 
-        bool cancel = (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) ||
+        bool cancel = PlayerControls.WasPressed(PlayerControls.Pause, Key.Escape) ||
                       (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame);
 
         if (cancel)
@@ -192,7 +192,7 @@ public class LevelSelectUI : MonoBehaviour
 
         panel.SetActive(true);
 
-        lockedPlayer = FindFirstObjectByType<TopDownPlayerController>();
+        lockedPlayer = FindAnyObjectByType<TopDownPlayerController>();
         if (lockedPlayer != null)
             lockedPlayer.SetMovementLocked(this, true);
 

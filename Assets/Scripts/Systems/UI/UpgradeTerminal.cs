@@ -30,7 +30,7 @@ public class UpgradeTerminal : MonoBehaviour, IInteractable
         if (SceneManager.GetActiveScene().name != SceneNames.Base)
             return;
 
-        if (FindFirstObjectByType<UpgradeTerminal>(FindObjectsInactive.Include) != null)
+        if (FindAnyObjectByType<UpgradeTerminal>(FindObjectsInactive.Include) != null)
             return;
 
         GameObject target = GameObject.Find("Upgrade");

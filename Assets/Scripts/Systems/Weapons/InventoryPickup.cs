@@ -18,13 +18,74 @@ public class InventoryPickup : MonoBehaviour, IInteractable
 
     public AudioClip pickupSound;
 
-    public string PromptText => string.Format(promptFormat, ItemCatalog.NameOf(itemId), amount);
+    public string PromptText
+    {
+        get
+        {
+            ItemDef def = ItemCatalog.Get(itemId);
+            if (def != null && def.category == ItemCategory.Consumable)
+                return $"[ E ] to use {def.displayName}\n{ConsumableEffect()}";
+
+            return string.Format(promptFormat, ItemCatalog.NameOf(itemId), amount);
+        }
+    }
+
+    private string ConsumableEffect()
+    {
+        return itemId == ItemCatalog.Medkit ? $"+{amount} HP" : $"+{amount} X-Gear charge";
+    }
+
+    // ของใช้ทันที: ใช้ไม่ได้ (เลือดเต็ม / X-Gear เต็ม) = ไม่เก็บ ของยังอยู่ที่เดิม
+    private bool TryConsume(GameObject interactor, out string reason)
+    {
+        reason = null;
+
+        if (itemId == ItemCatalog.Medkit)
+        {
+            PlayerHealth health = interactor.GetComponentInParent<PlayerHealth>();
+            if (health == null)
+                return false;
+
+            if (!health.Heal(amount))
+            {
+                reason = "Health is full";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (itemId == ItemCatalog.XGearCell)
+        {
+            XGearSystem gear = interactor.GetComponentInParent<XGearSystem>();
+            return gear != null && gear.AddCharges(amount, out reason);
+        }
+
+        return false;
+    }
 
     public void Interact(GameObject interactor)
     {
         ItemDef def = ItemCatalog.Get(itemId);
         if (def == null)
             return;
+
+        if (def.category == ItemCategory.Consumable)
+        {
+            if (!TryConsume(interactor, out string reason))
+            {
+                if (!string.IsNullOrEmpty(reason))
+                    HudToast.Show(reason);
+
+                SfxLibrary.Play("ui_error");
+                return;
+            }
+
+            SfxLibrary.PlayPickup();
+            HudToast.Show(def.displayName + "  " + ConsumableEffect());
+            Destroy(gameObject);
+            return;
+        }
 
         if (def.category == ItemCategory.Ammo)
         {

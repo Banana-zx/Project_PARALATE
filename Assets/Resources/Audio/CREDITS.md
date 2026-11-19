@@ -17,19 +17,15 @@ Downloaded 2026-11-15. Files were renamed only (no editing) so `SfxLibrary` can 
 | File in this project | Pack | Original file |
 |---|---|---|
 | footstep_1.ogg | Impact Sounds | footstep_concrete_000.ogg |
-| footstep_6.ogg | RPG Audio | footstep00.ogg |
-| enemy_footstep_1.ogg | RPG Audio | footstep05.ogg |
 | footstep_2.ogg | Impact Sounds | footstep_concrete_001.ogg |
-| enemy_footstep_2.ogg | RPG Audio | footstep06.ogg |
 | footstep_3.ogg | Impact Sounds | footstep_concrete_002.ogg |
-| footstep_8.ogg | RPG Audio | footstep02.ogg |
-| enemy_footstep_3.ogg | RPG Audio | footstep07.ogg |
 | footstep_4.ogg | Impact Sounds | footstep_concrete_003.ogg |
-| footstep_9.ogg | RPG Audio | footstep03.ogg |
-| enemy_footstep_4.ogg | RPG Audio | footstep08.ogg |
 | footstep_5.ogg | Impact Sounds | footstep_concrete_004.ogg |
-| footstep_10.ogg | RPG Audio | footstep04.ogg |
-| enemy_footstep_5.ogg | RPG Audio | footstep09.ogg |
+| enemy_footstep_1.ogg | Impact Sounds | footstep_wood_000.ogg |
+| enemy_footstep_2.ogg | Impact Sounds | footstep_wood_001.ogg |
+| enemy_footstep_3.ogg | Impact Sounds | footstep_wood_002.ogg |
+| enemy_footstep_4.ogg | Impact Sounds | footstep_wood_003.ogg |
+| enemy_footstep_5.ogg | Impact Sounds | footstep_wood_004.ogg |
 | weapon_switch.ogg | RPG Audio | handleSmallLeather.ogg |
 | weapon_equip.ogg | RPG Audio | metalLatch.ogg |
 | weapon_unequip.ogg | RPG Audio | clothBelt.ogg |

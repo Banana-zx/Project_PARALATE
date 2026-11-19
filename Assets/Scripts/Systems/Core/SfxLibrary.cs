@@ -29,7 +29,8 @@ public static class SfxLibrary
         { "knife_hit", 0.8f }, { "menu_close", 0.6f }, { "weapon_equip", 0.7f },
         { "ui_hover", 0.5f }, { "wheel_tick", 0.6f }, { "craft_success", 0.8f },
         { "zoom_in", 0.7f }, { "zoom_out", 0.7f },
-        { "footstep_6", 0.6f }, { "footstep_8", 0.8f }, { "footstep_9", 0.6f }, { "enemy_footstep_4", 0.6f },
+        // เสียงเดิน: ผู้เล่น = รองเท้าบนพื้นคอนกรีต (หนักแน่น แบบชุดแรก) / ศัตรู = ไม้ (หนัก ได้ยินชัดว่าอยู่ทางไหน)
+        { "footstep", 1f }, { "enemy_footstep", 0.9f },
 
         { "knife_swing", 1.6f }, { "scope_in", 1.6f }, { "weapon_switch", 1.6f }, { "menu_open", 1.6f },
         { "note_close", 1.5f }, { "empty_click", 1.4f }, { "scope_out", 1.3f }, { "weapon_unequip", 1.2f },

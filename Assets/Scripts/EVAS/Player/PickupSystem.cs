@@ -40,8 +40,6 @@ public class PickupSystem : MonoBehaviour
 
     private PlayerInput playerInput;
     private InputAction interactAction;
-    private InputAction switchWeaponAction;
-    private InputAction unequipWeaponAction;
     private TopDownPlayerController movementController;
     private KnockoutSystem knockoutSystem;
     private PickupDetector pickupDetector;
@@ -85,8 +83,6 @@ public class PickupSystem : MonoBehaviour
     {
         playerInput = GetComponent<PlayerInput>();
         interactAction = playerInput.actions["Interact"];
-        switchWeaponAction = playerInput.actions["SwitchWeapon"];
-        unequipWeaponAction = playerInput.actions["UnequipWeapon"];
         movementController = GetComponent<TopDownPlayerController>();
         knockoutSystem = GetComponent<KnockoutSystem>();
         pickupDetector = GetComponent<PickupDetector>();
@@ -112,15 +108,7 @@ public class PickupSystem : MonoBehaviour
         if (pickupDetector != null && interactAction.WasPressedThisFrame())
             pickupDetector.TryInteract();
 
-        // ถ้าวงล้อเปิดอยู่ ไม่ต้องรับ input สลับ/ถอดแบบเดิม
-        if (weaponWheel != null && weaponWheel.IsOpen)
-            return;
-
-        if (switchWeaponAction.WasPressedThisFrame())
-            CycleSlot();
-
-        if (unequipWeaponAction.WasPressedThisFrame())
-            Select(HeldSlot.Unarmed);
+        // เปลี่ยนอาวุธทำผ่านแถบ Tab + ลูกกลิ้ง (WeaponWheelUI) ทางเดียว (ปุ่มลัด 1 / 2 ถูกเอาออกแล้ว)
     }
 
     // ------------------------------------------------------------ ข้อมูลช่อง
@@ -317,8 +305,8 @@ public class PickupSystem : MonoBehaviour
         return true;
     }
 
-    // ปุ่มลัดสลับอาวุธ (ปุ่ม 1): วนเฉพาะช่องที่มีอาวุธจริง Primary ↔ Secondary
-    void CycleSlot()
+    // วนเฉพาะช่องที่มีอาวุธจริง Primary ↔ Secondary (เดิมใช้กับปุ่มลัด 1 ตอนนี้ไม่มีปุ่มเรียกแล้ว เก็บไว้ให้โค้ดอื่นใช้)
+    public void CycleSlot()
     {
         if (primaryItem == null && secondaryItem == null)
             return;
@@ -358,7 +346,7 @@ public class PickupSystem : MonoBehaviour
         if (ammoUIManager == null && !searchedAmmoUI)
         {
             searchedAmmoUI = true;
-            ammoUIManager = FindFirstObjectByType<AmmoUIManager>(FindObjectsInactive.Include);
+            ammoUIManager = FindAnyObjectByType<AmmoUIManager>(FindObjectsInactive.Include);
         }
 
         if (ammoUIManager == null)

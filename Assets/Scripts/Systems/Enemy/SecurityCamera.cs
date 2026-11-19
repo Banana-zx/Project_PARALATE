@@ -223,7 +223,7 @@ public class SecurityCamera : MonoBehaviour
             return;
         }
 
-        AlertState[] enemies = FindObjectsByType<AlertState>(FindObjectsSortMode.None);
+        AlertState[] enemies = FindObjectsByType<AlertState>();
         float sqrRadius = alertRadius * alertRadius;
 
         for (int i = 0; i < enemies.Length; i++)

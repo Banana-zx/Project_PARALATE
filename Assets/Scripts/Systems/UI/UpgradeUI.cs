@@ -60,7 +60,7 @@ public class UpgradeUI : MonoBehaviour
 
     private void Update()
     {
-        bool cancel = (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) ||
+        bool cancel = PlayerControls.WasPressed(PlayerControls.Pause, Key.Escape) ||
                       (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame);
 
         if (cancel)
@@ -71,7 +71,7 @@ public class UpgradeUI : MonoBehaviour
     {
         gameObject.SetActive(true);
 
-        lockedPlayer = FindFirstObjectByType<TopDownPlayerController>();
+        lockedPlayer = FindAnyObjectByType<TopDownPlayerController>();
         if (lockedPlayer != null)
             lockedPlayer.SetMovementLocked(this, true);
 
@@ -551,34 +551,5 @@ public class UpgradeUI : MonoBehaviour
                 },
                 affordable, null, ItemCatalog.IconOf(recipe.ammoId));
         }
-    }
-}
-
-/// <summary>ช่องภาพตัวละคร (Portrait): ใช้ Sprite จาก Resources ถ้ามี ไม่งั้นวาดเงาคนแบบง่ายแทน</summary>
-public static class UIPortrait
-{
-    public static void Build(Transform parent, string resourcePath)
-    {
-        Sprite sprite = Resources.Load<Sprite>(resourcePath);
-        if (sprite != null)
-        {
-            Image image = UIBuilder.Panel("Portrait", parent, Color.white, false);
-            image.sprite = sprite;
-            image.preserveAspect = true;
-            UIBuilder.Stretch(image.rectTransform, 12f, 12f, 12f, 12f);
-            return;
-        }
-
-        Color silhouette = new Color(1f, 1f, 1f, 0.14f);
-
-        Image head = UIBuilder.Panel("Head", parent, silhouette, false);
-        head.sprite = UIBuilder.CircleSprite;
-        UIBuilder.Place(head.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 170f), new Vector2(130f, 130f));
-
-        Image body = UIBuilder.Panel("Body", parent, silhouette, false);
-        UIBuilder.Place(body.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, 95f), new Vector2(190f, 330f));
-
-        TextMeshProUGUI label = UIBuilder.Text("Label", parent, "PORTRAIT", 18f, TextAlignmentOptions.Bottom, UIBuilder.MutedText);
-        UIBuilder.Stretch(label.rectTransform, 0f, 14f, 0f, 0f);
     }
 }

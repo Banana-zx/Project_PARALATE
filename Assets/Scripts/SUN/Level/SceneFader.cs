@@ -290,7 +290,7 @@ public class SceneFader : MonoBehaviour
             loadingLabel.alignment = TextAlignmentOptions.Bottom;
             loadingLabel.color = loadingTextColor;
             loadingLabel.raycastTarget = false;
-            loadingLabel.enableWordWrapping = false;
+            loadingLabel.textWrappingMode = TextWrappingModes.NoWrap;
         }
 
         loadingRoot.SetActive(false);

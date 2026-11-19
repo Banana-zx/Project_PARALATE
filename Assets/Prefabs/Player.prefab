@@ -267,6 +267,7 @@ GameObject:
   - component: {fileID: 1778765222040307558}
   - component: {fileID: 134195485646672128}
   - component: {fileID: 3399745134308610971}
+  - component: {fileID: 1136940268464170537}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -858,6 +859,22 @@ MonoBehaviour:
   pitchVariance: 0.08
   volumeVariance: 0.15
   footstepBaseVolume: 1
+--- !u!114 &1136940268464170537
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3523246845713457628}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a81b2cfae54c26f4aa79077b3c650934, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::XGearSystem
+  maxCharges: 1
+  invisibleDuration: 5
+  fleetFootCrouchMultiplier: 1.05
+  chargeColor: {r: 0.25, g: 0.7, b: 1, a: 1}
 --- !u!1 &4088241774735004752
 GameObject:
   m_ObjectHideFlags: 0

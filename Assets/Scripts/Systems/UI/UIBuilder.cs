@@ -239,6 +239,42 @@ public static class UIBuilder
         }
     }
 
+    private static Sprite triangleSprite;
+
+    /// <summary>Sprite สามเหลี่ยมชี้ลง (▽ แบบทึบ) ใช้เป็นลูกศรพับ/เปิด หมุน 180 องศา = ชี้ขึ้น</summary>
+    public static Sprite TriangleSprite
+    {
+        get
+        {
+            if (triangleSprite != null)
+                return triangleSprite;
+
+            const int width = 64;
+            const int height = 48;
+            Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            Color32[] pixels = new Color32[width * height];
+
+            for (int y = 0; y < height; y++)
+            {
+                // y = 0 คือแถวล่าง (ปลายแหลม) / y = height-1 คือฐานด้านบน
+                float halfWidth = (y + 0.5f) / height * (width * 0.5f);
+                for (int x = 0; x < width; x++)
+                {
+                    float fromCenter = Mathf.Abs(x + 0.5f - width * 0.5f);
+                    float alpha = Mathf.Clamp01(halfWidth - fromCenter + 0.5f); // ขอบนุ่ม 1 พิกเซล
+                    pixels[y * width + x] = new Color(1f, 1f, 1f, alpha);
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            triangleSprite = Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f);
+            triangleSprite.name = "UIBuilder Triangle";
+            return triangleSprite;
+        }
+    }
+
     public static void Clear(Transform root)
     {
         if (root == null)

@@ -90,6 +90,10 @@ public class KnockoutPromptUI : MonoBehaviour
 
     public void SetPromptVisible(bool visible)
     {
+        // ครั้งแรกที่ได้ตัดสินใจ ฆ่า/ไว้ชีวิต: ปลดล็อกบันทึก "Kill or Not" (ปลดแล้วจะไม่ทำซ้ำ)
+        if (visible)
+            GameLog.Unlock("kill_or_not");
+
         if (promptRoot != null && promptRoot.activeSelf != visible)
             promptRoot.SetActive(visible);
     }
@@ -158,7 +162,7 @@ public class KnockoutPromptUI : MonoBehaviour
     {
         const string groupName = "Kill&Mercy";
 
-        Transform[] all = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        Transform[] all = FindObjectsByType<Transform>(FindObjectsInactive.Include);
 
         if (promptRoot == null || barRoot == null)
         {

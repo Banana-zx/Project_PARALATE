@@ -7,7 +7,8 @@ public enum ItemCategory
     Ammo,
     PassiveChip,
     ActiveChip,
-    MapData
+    MapData,
+    Consumable  // ใช้ทันทีตอนเก็บ (ยาเพิ่มเลือด, เซลล์ X-Gear)
 }
 
 public enum AmmoType
@@ -60,6 +61,8 @@ public static class ItemCatalog
     public const string ChipFleetFoot = "chip_fleetfoot";
     public const string ChipInvisible = "chip_invisible";
     public const string MapHideOut = "map_hideout";
+    public const string Medkit = "medkit";
+    public const string XGearCell = "xgear_cell";
 
     private static Dictionary<string, ItemDef> defs;
     private static List<ItemDef> ordered;
@@ -79,11 +82,15 @@ public static class ItemCatalog
 
         Add(ChipFleetFoot, "Passive Chip : FleetFoot", "Passive. Crouch movement speed +5%.", ItemCategory.PassiveChip, new Color(0.4f, 0.9f, 0.5f));
         Add(ChipInvisible, "Active Chip : Invisible",
-            "Active. Become invisible for 5 seconds. Enemies cannot detect you by sight.\nSwitch to X-Gear and press Left Click. One use per mission.",
+            "Active. Become invisible for 5 seconds. Enemies cannot detect you by sight.\nSwitch to X-Gear and press Left Click. Uses per mission = X-Gear charges.",
             ItemCategory.ActiveChip, new Color(0.35f, 0.7f, 1f));
 
         ItemDef map = Add(MapHideOut, "Map Data : HideOut", "Shows the full HideOut minimap, including enemies.", ItemCategory.MapData, new Color(0.9f, 0.5f, 0.9f));
         map.sceneName = "HideOut";
+
+        // ของใช้ทันที: จำนวน (amount) ของกล่องที่วางในฉาก = ปริมาณที่ได้ (HP ที่ฟื้น / จำนวนครั้ง X-Gear)
+        Add(Medkit, "Medkit", "Restores health when picked up.", ItemCategory.Consumable, new Color(1f, 0.35f, 0.35f));
+        Add(XGearCell, "X-Gear Cell", "Restores X-Gear charges when picked up (up to the maximum).", ItemCategory.Consumable, new Color(0.25f, 0.7f, 1f));
     }
 
     private static ItemDef Add(string id, string name, string description, ItemCategory category, Color color)

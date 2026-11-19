@@ -778,10 +778,11 @@ public class GunAction : MonoBehaviour
         if (!isScoped || !useFirstPersonScope || firstPersonScopeCameraObject == null)
             return;
 
-        Vector2 lookDelta = Mouse.current != null ? Mouse.current.delta.ReadValue() : Vector2.zero;
-        firstPersonYaw += lookDelta.x * firstPersonMouseSensitivity;
+        // CameraLook ใน PlayerInput.inputactions (เมาส์ขยับ / right stick) ค่าที่ได้เป็นองศาแล้ว
+        Vector2 lookDelta = PlayerControls.ReadLook(firstPersonMouseSensitivity, 90f);
+        firstPersonYaw += lookDelta.x;
         firstPersonPitch = Mathf.Clamp(
-            firstPersonPitch - lookDelta.y * firstPersonMouseSensitivity,
+            firstPersonPitch - lookDelta.y,
             minFirstPersonPitch,
             maxFirstPersonPitch);
 
