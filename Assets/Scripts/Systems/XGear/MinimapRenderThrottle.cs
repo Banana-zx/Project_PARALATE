@@ -1,15 +1,11 @@
 using UnityEngine;
-using UnityEngine.Rendering.HighDefinition;
+using UnityEngine.Rendering.Universal;
 
 /// <summary>
-/// ลดภาระของกล้อง Minimap: ใน HDRP กล้องทุกตัวเรนเดอร์ "ทั้ง pipeline" (เงา, แสง, เอฟเฟกต์) ทุกเฟรม
-/// กล้อง Minimap จึงกินแรงเกือบเท่ากล้องหลักอีกตัว ทั้งที่ภาพแผนที่ไม่จำเป็นต้องลื่นเท่าเกม
-///
-/// สิ่งที่ทำ:
-///   1) เรนเดอร์เป็นช่วงๆ (ค่าเริ่มต้น 10 ครั้ง/วินาที): เปิด Camera แค่เฟรมที่ถึงเวลา เฟรมอื่นปิด
-///      RenderTexture ยังเก็บภาพล่าสุดไว้ แผนที่บนจอจึงไม่กะพริบ
-///   2) ปิดของแพงที่แผนที่มองจากด้านบนไม่ต้องใช้ (เงา, Volumetric Fog, SSAO, SSR, SSGI ฯลฯ) ผ่าน Custom Frame Settings
-///   3) SetVisible(false) = ปิดกล้องสนิท (ใช้ตอน HUD ไม่ได้โชว์แผนที่)
+/// ลดภาระของกล้อง Minimap สำหรับ URP:
+///   1) เรนเดอร์เป็นช่วงๆ (ค่าเริ่มต้น 10 ครั้ง/วินาที)
+///   2) ปิดเงา, Post-processing และ texture เสริมใน UniversalAdditionalCameraData
+///   3) SetVisible(false) = ปิดกล้องสนิท
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Camera))]
@@ -79,28 +75,13 @@ public class MinimapRenderThrottle : MonoBehaviour
 
     private void ApplyCheapFrameSettings()
     {
-        HDAdditionalCameraData data = GetComponent<HDAdditionalCameraData>();
+        UniversalAdditionalCameraData data = GetComponent<UniversalAdditionalCameraData>();
         if (data == null)
             return;
 
-        data.customRenderingSettings = true;
-
-        Disable(data, FrameSettingsField.ShadowMaps);
-        Disable(data, FrameSettingsField.ContactShadows);
-        Disable(data, FrameSettingsField.ScreenSpaceShadows);
-        Disable(data, FrameSettingsField.Volumetrics);
-        Disable(data, FrameSettingsField.ReprojectionForVolumetrics);
-        Disable(data, FrameSettingsField.SSAO);
-        Disable(data, FrameSettingsField.SSR);
-        Disable(data, FrameSettingsField.SSGI);
-        Disable(data, FrameSettingsField.SubsurfaceScattering);
-        Disable(data, FrameSettingsField.Refraction);
-        Disable(data, FrameSettingsField.MotionVectors);
-    }
-
-    private static void Disable(HDAdditionalCameraData data, FrameSettingsField field)
-    {
-        data.renderingPathCustomFrameSettingsOverrideMask.mask[(uint)field] = true;
-        data.renderingPathCustomFrameSettings.SetEnabled(field, false);
+        data.renderShadows = false;
+        data.renderPostProcessing = false;
+        data.requiresDepthTexture = false;
+        data.requiresColorTexture = false;
     }
 }
