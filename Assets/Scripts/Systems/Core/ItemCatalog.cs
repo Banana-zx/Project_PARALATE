@@ -8,7 +8,8 @@ public enum ItemCategory
     PassiveChip,
     ActiveChip,
     MapData,
-    Consumable  // ใช้ทันทีตอนเก็บ (ยาเพิ่มเลือด, เซลล์ X-Gear)
+    Consumable, // ของใช้ (ยาเพิ่มเลือด, เซลล์ X-Gear): เก็บเข้าคลัง แล้วเรียกใช้ผ่าน Command
+    Weapon      // อาวุธที่เป็นเจ้าของ (เก็บครั้งแรก = ปลดล็อกสูตร Command ของอาวุธนั้น)
 }
 
 public enum AmmoType
@@ -29,9 +30,11 @@ public enum WeaponSlotType
 public enum HeldSlot
 {
     Unarmed = 0,
-    Primary = 1,
-    Secondary = 2,
-    XGear = 3
+    Primary = 1,   // ไม่ใช้แล้ว (อาวุธเรียกผ่านช่อง Command) เก็บค่าไว้ไม่ให้ข้อมูลเดิมเพี้ยน
+    Secondary = 2, // ไม่ใช้แล้ว
+    XGear = 3,
+    Command = 4,   // ไอเทม/อาวุธที่เรียกด้วยสูตร CommandLine
+    Knife = 5      // มีดติดตัวตั้งแต่เริ่ม คลิกซ้ายฟัน
 }
 
 public sealed class ItemDef
@@ -63,6 +66,10 @@ public static class ItemCatalog
     public const string MapHideOut = "map_hideout";
     public const string Medkit = "medkit";
     public const string XGearCell = "xgear_cell";
+    public const string WeaponUsp = "weapon_usp";
+    public const string WeaponSniper = "weapon_sniper";
+    public const string WeaponAk = "weapon_ak";
+    public const string WeaponKnife = "weapon_knife";
 
     private static Dictionary<string, ItemDef> defs;
     private static List<ItemDef> ordered;
@@ -88,9 +95,15 @@ public static class ItemCatalog
         ItemDef map = Add(MapHideOut, "Map Data : HideOut", "Shows the full HideOut minimap, including enemies.", ItemCategory.MapData, new Color(0.9f, 0.5f, 0.9f));
         map.sceneName = "HideOut";
 
-        // ของใช้ทันที: จำนวน (amount) ของกล่องที่วางในฉาก = ปริมาณที่ได้ (HP ที่ฟื้น / จำนวนครั้ง X-Gear)
-        Add(Medkit, "Medkit", "Restores health when picked up.", ItemCategory.Consumable, new Color(1f, 0.35f, 0.35f));
-        Add(XGearCell, "X-Gear Cell", "Restores X-Gear charges when picked up (up to the maximum).", ItemCategory.Consumable, new Color(0.25f, 0.7f, 1f));
+        // ของใช้: เก็บเข้าคลัง แล้วเรียกด้วย Command → คลิกซ้ายเพื่อใช้ (ปริมาณที่ฟื้นตั้งใน Resources/CommandBook)
+        Add(Medkit, "Medkit", "Restores health.\nCall it with its Command, then Left Click to use.", ItemCategory.Consumable, new Color(1f, 0.35f, 0.35f));
+        Add(XGearCell, "X-Gear Cell", "Restores 1 X-Gear charge (up to the maximum).\nCall it with its Command, then Left Click to use.", ItemCategory.Consumable, new Color(0.25f, 0.7f, 1f));
+
+        // อาวุธ: เก็บครั้งแรก = เป็นเจ้าของถาวร + ปลดล็อกสูตร Command / เรียกมาได้ 1 แม็ก ยิงหมดติด Cooldown
+        Add(WeaponUsp, "USP", "Pistol. Call it with its Command: one magazine, then a cooldown.", ItemCategory.Weapon, new Color(1f, 0.6f, 0.3f));
+        Add(WeaponSniper, "Sniper", "Sniper rifle. Call it with its Command: one magazine, then a cooldown.", ItemCategory.Weapon, new Color(1f, 0.6f, 0.3f));
+        Add(WeaponAk, "AK47", "Assault rifle. Call it with its Command: one magazine, then a cooldown.", ItemCategory.Weapon, new Color(1f, 0.6f, 0.3f));
+        Add(WeaponKnife, "Knife", "Makes stealth kills from a strangle faster.", ItemCategory.Weapon, new Color(1f, 0.6f, 0.3f));
     }
 
     private static ItemDef Add(string id, string name, string description, ItemCategory category, Color color)
@@ -146,6 +159,27 @@ public static class ItemCatalog
         }
 
         return sprite;
+    }
+
+    /// <summary>id ของอาวุธในคลัง จากตัวปืน/มีดที่วางในฉาก (null = ไม่ใช่อาวุธ)</summary>
+    public static string WeaponIdOf(GameObject weapon)
+    {
+        if (weapon == null)
+            return null;
+
+        if (weapon.GetComponent<KnifeAction>() != null)
+            return WeaponKnife;
+
+        GunAction gun = weapon.GetComponent<GunAction>();
+        if (gun == null)
+            return null;
+
+        switch (gun.ResolvedAmmoType)
+        {
+            case AmmoType.Pistol: return WeaponUsp;
+            case AmmoType.Sniper: return WeaponSniper;
+            default: return WeaponAk;
+        }
     }
 
     public static string AmmoId(AmmoType type)

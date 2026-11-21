@@ -20,6 +20,13 @@ public static class UIBuilder
 
     private static Sprite circleSprite;
 
+    /// <summary>ล้าง Sprite ที่จำไว้ (เครื่องมือสร้าง Prefab เรียกหลังเขียนไฟล์รูปลง Resources/UI)</summary>
+    public static void ClearSpriteCache()
+    {
+        circleSprite = null;
+        triangleSprite = null;
+    }
+
     public static Canvas CreateCanvas(string name, int sortingOrder, Transform parent = null)
     {
         GameObject go = new GameObject(name, typeof(RectTransform));
@@ -214,6 +221,11 @@ public static class UIBuilder
             if (circleSprite != null)
                 return circleSprite;
 
+            // ใช้ไฟล์รูปใน Resources/UI ก่อน (Prefab ที่สร้างใน Editor อ้างถึงไฟล์นี้ได้)
+            circleSprite = Resources.Load<Sprite>("UI/UI_Circle");
+            if (circleSprite != null)
+                return circleSprite;
+
             const int size = 128;
             Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
             texture.wrapMode = TextureWrapMode.Clamp;
@@ -246,6 +258,10 @@ public static class UIBuilder
     {
         get
         {
+            if (triangleSprite != null)
+                return triangleSprite;
+
+            triangleSprite = Resources.Load<Sprite>("UI/UI_Triangle");
             if (triangleSprite != null)
                 return triangleSprite;
 
@@ -287,39 +303,6 @@ public static class UIBuilder
             UnityEngine.Object.Destroy(child);
         }
     }
-}
-
-/// <summary>ส่งต่อ event ของเมาส์ (ชี้ / ออก / คลิกขวา) ให้โค้ดที่สร้าง UI และเล่นเสียงปุ่ม</summary>
-public class UIPointerRelay : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
-{
-    public Action onEnter;
-    public Action onExit;
-    public Action onRightClick;
-    public bool playSounds;
-
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        if (playSounds)
-            SfxLibrary.PlayUI("ui_hover", true);
-
-        onEnter?.Invoke();
-    }
-
-    public void OnPointerExit(PointerEventData eventData) => onExit?.Invoke();
-
-    public void OnPointerClick(PointerEventData eventData)
-    {
-        if (eventData.button == PointerEventData.InputButton.Right)
-        {
-            onRightClick?.Invoke();
-            return;
-        }
-
-        if (playSounds && eventData.button == PointerEventData.InputButton.Left)
-            SfxLibrary.PlayUI("ui_click");
-    }
-
-    private void OnDisable() => onExit?.Invoke();
 }
 
 /// <summary>ข้อความแจ้งเตือนสั้นๆ กลางจอด้านล่าง (เก็บของ, กระสุนหมด, เปลี่ยนอาวุธ ฯลฯ) สร้างตัวเองอัตโนมัติ</summary>

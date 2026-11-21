@@ -38,6 +38,25 @@ public class GunAction : MonoBehaviour
     public float reloadMovementSpeedMultiplier = 0.5f;
     public bool autoReloadWhenEmpty = true;
 
+    [Header("Command (เรียกปืนด้วยสูตรลูกศร)")]
+    [Tooltip("ยิงแม็กที่เรียกมาหมดแล้ว ต้องรอกี่วินาทีจึงเรียกปืนนี้ได้อีก")]
+    [Min(0f)] public float commandCooldown = 30f;
+
+    /// <summary>ปืนที่เรียกด้วย Command: มีแม็กเดียว รีโหลดไม่ได้ ไม่ใช้กระสุนในกระเป๋า</summary>
+    public bool CommandMode { get; private set; }
+
+    /// <summary>ยิงนัดสุดท้ายของแม็กแล้ว (ใช้ใน Command mode เพื่อเก็บปืนและเริ่ม Cooldown)</summary>
+    public event Action OnMagazineEmptied;
+
+    /// <summary>เปิดโหมด Command: เติมแม็กเต็ม 1 แม็ก</summary>
+    public void SetCommandMode(bool value)
+    {
+        CommandMode = value;
+        if (value)
+            currentAmmo = magazineSize;
+        UpdateAmmoUI();
+    }
+
     [Header("Crosshair & UI")]
     public RectTransform crosshairUI;
     public event Action<int, int> OnAmmoChanged;
@@ -133,7 +152,7 @@ public class GunAction : MonoBehaviour
     public string UpgradeKey => WeaponUpgrades.KeyOf(ResolvedAmmoType);
 
     /// <summary>กระสุนสำรองในกระเป๋า (คลังถาวร) ของชนิดที่ปืนนี้ใช้</summary>
-    public int ReserveAmmo => PersistentInventory.Instance != null ? PersistentInventory.Instance.GetAmount(AmmoItemId) : 0;
+    public int ReserveAmmo => CommandMode ? 0 : PersistentInventory.Instance != null ? PersistentInventory.Instance.GetAmount(AmmoItemId) : 0;
 
     public float EffectiveDamage => damage * WeaponUpgrades.DamageMultiplier(UpgradeKey);
     public float EffectiveReloadDuration => reloadDuration / WeaponUpgrades.ReloadSpeedMultiplier(UpgradeKey);
@@ -259,6 +278,8 @@ public class GunAction : MonoBehaviour
         {
             // แม็กว่าง: เสียงไกเปล่า + บอกผู้เล่นว่าต้องทำอะไร
             SfxLibrary.Play("empty_click");
+            if (CommandMode)
+                return;
             HudToast.Show(ReserveAmmo > 0 ? "Press R to reload" : "Out of " + ItemCatalog.NameOf(AmmoItemId));
         }
     }
@@ -300,7 +321,7 @@ public class GunAction : MonoBehaviour
 
     void HandleReload()
     {
-        if (!isHeld || isReloading || IsOwnerLocked())
+        if (!isHeld || isReloading || IsOwnerLocked() || CommandMode)
             return;
 
         if (currentAmmo >= magazineSize)
@@ -332,7 +353,7 @@ public class GunAction : MonoBehaviour
 
     public void StartReload()
     {
-        if (!isHeld || isReloading || currentAmmo >= magazineSize)
+        if (!isHeld || isReloading || currentAmmo >= magazineSize || CommandMode)
             return;
 
         // ไม่มีกระสุนชนิดนี้ในกระเป๋า = รีโหลดไม่ได้
@@ -502,6 +523,9 @@ public class GunAction : MonoBehaviour
         currentAmmo--;
         UpdateAmmoUI();
 
+        if (currentAmmo <= 0)
+            OnMagazineEmptied?.Invoke();
+
         // เล่นเสียงยิงปืนและปล่อยเสียงให้ AI ได้ยิน
         PlaySound(fireSound, fireVolume, "shot_" + UpgradeKey.ToLowerInvariant());
         PlayerNoiseEmitter noiseEmitter = ResolveNoiseEmitter();
@@ -530,8 +554,16 @@ public class GunAction : MonoBehaviour
                 float dealt = EffectiveDamage * (lastShotHeadshot ? HeadshotMultiplier : 1f);
                 enemy.TakeDamage(dealt, lastShotHeadshot);
             }
-            else if (noiseEmitter != null)
-                noiseEmitter.EmitBulletHitWall(hit.point);
+            else
+            {
+                // ของที่ยิงพังได้ (กล้องวงจรปิด ฯลฯ)
+                IShootable shootable = hit.collider.GetComponentInParent<IShootable>();
+                if (shootable != null)
+                    shootable.TakeShot(EffectiveDamage, hit.point);
+
+                if (noiseEmitter != null)
+                    noiseEmitter.EmitBulletHitWall(hit.point);
+            }
 
         }
         else

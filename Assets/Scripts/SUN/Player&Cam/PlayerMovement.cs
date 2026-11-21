@@ -18,6 +18,9 @@ public class TopDownPlayerController : MonoBehaviour
     public float walkSpeed = 5f;
     public float sprintSpeed = 8f;
     public float crouchSpeed = 2.5f;
+    [Tooltip("เวลาที่ใช้เร่งจากความเร็วเดินถึงความเร็ววิ่งสูงสุด (วินาที)\n" +
+             "ระหว่างเร่ง = ท่า Slow Run / ถึงความเร็วสูงสุด = ท่า Fast Run")]
+    [Min(0f)] public float sprintAccelerationTime = 0.8f;
     private float wallHugMoveAmount;
 
     [Header("Rotation Settings")]
@@ -60,6 +63,21 @@ public class TopDownPlayerController : MonoBehaviour
     public float climbUpSpeed = 3f;
     public float climbDownSpeed = 6f;
     public float topExitOffset = 1.5f;
+    [Tooltip("ใช้กับบันไดเก่าที่ไม่มีคอมโพเนนต์ Ladder เท่านั้น (บันไดที่มี Ladder ใช้ Stand Distance ของบันไดนั้น)\n" +
+             "ระยะห่างจากหน้าบันไดถึงตัวผู้เล่นตอนปีน (เมตร)")]
+    public float ladderSnapDistance = 0.35f;
+    [Tooltip("ความสูงจากเท้าที่ใช้ยิง Ray หาหน้าบันได")]
+    public float ladderSnapRayHeight = 1.0f;
+    [Tooltip("คลิปปีน (MigeClimbing) เล่นความเร็วปกติแล้วตัวขึ้นกี่เมตรต่อวินาที ใช้ปรับความเร็วอนิเมชั่นให้ตรงกับความเร็วปีนจริง")]
+    public float climbAnimMetersPerSecond = 0.68f;
+    [Tooltip("ความเร็วอนิเมชั่นปีนสูงสุด (เท่าของปกติ) กันท่าปีนเร็วจนดูไม่จริง")]
+    public float maxClimbAnimSpeed = 2.5f;
+    [Tooltip("ความเร็วท่าปีนขึ้นขอบ (MigeClimbingEdge) ตอนถึงยอดบันได: 1 = ปกติ (2.07 วิ), มากกว่า = เร็วขึ้น")]
+    [Min(0.1f)] public float topExitAnimSpeed = 1.4f;
+    [Tooltip("ชื่อคลิปท่าปีนขึ้นขอบ ใช้หาความยาวคลิปให้การเลื่อนตัวตรงกับท่า (ไม่มีคลิป = ก้าวขึ้น 0.5 วิแบบเดิม)")]
+    public string topExitClipName = "MigeClimbingEdge";
+    [Tooltip("มีท่าปีนขึ้นขอบ: เริ่มท่าเมื่อเท้าอยู่ต่ำกว่าพื้นด้านบนเท่านี้ (เมตร) = ตอนมือถึงขอบพอดีตามเฟรมแรกของคลิป")]
+    public float topExitStartBelowFloor = 0.95f;
     public LayerMask ladderLayer;
 
     // ★ แก้ไขตรงนี้ — เพิ่ม field ใหม่ ใช้กำหนดว่ากล้องมองชันแค่ไหนถึงจะสลับไปใช้ camUp แทน camForward
@@ -106,6 +124,13 @@ public class TopDownPlayerController : MonoBehaviour
     private static readonly int ClimbTopExitHash = Animator.StringToHash("ClimbTopExit");
     private static readonly int IsWalkHash = Animator.StringToHash("isWalk");
     private static readonly int IsSneakHash = Animator.StringToHash("isSneak");
+    private static readonly int IsRunHash = Animator.StringToHash("isRun");
+    private static readonly int RunBlendHash = Animator.StringToHash("RunBlend");
+
+    // 0 = เพิ่งเริ่มวิ่ง (Slow Run) → 1 = วิ่งเต็มความเร็ว (Fast Run)
+    private float sprintBlend;
+    private bool hasRunParams;
+    private bool checkedRunParams;
     private bool isClimbing = false;
     private float movementSpeedMultiplier = 1f;
     private bool isSprintLocked = false;
@@ -130,6 +155,17 @@ public class TopDownPlayerController : MonoBehaviour
     private readonly HashSet<object> aimBlockers = new HashSet<object>();
 
     /// <summary>เล็งได้ไหม: ไม่ได้ถ้ามีระบบสั่งบล็อก หรือกำลังพิงกำแพง (ตอนพิง เมาส์ใช้เลื่อนกล้องซ้าย/ขวา)</summary>
+    private PickupSystem heldItems;
+
+    bool HoldingUnarmedOrKnife()
+    {
+        if (heldItems == null)
+            heldItems = GetComponent<PickupSystem>();
+
+        return heldItems != null &&
+               (heldItems.CurrentSlot == HeldSlot.Unarmed || heldItems.CurrentSlot == HeldSlot.Knife);
+    }
+
     public bool CanAim => aimBlockers.Count == 0 && !(wallHug != null && wallHug.IsHugging);
 
     public void SetAimBlocked(object owner, bool blocked)
@@ -246,7 +282,8 @@ public class TopDownPlayerController : MonoBehaviour
             return;
         }
 
-        if (aimAction != null) isAiming = CanAim && aimAction.IsPressed();
+        // คลิกขวาหันตามเมาส์ได้เฉพาะตอนถือปืน (มือเปล่า / มีด = ไม่หันตามเมาส์ ฟันตรงหน้าตัวละคร)
+        if (aimAction != null) isAiming = CanAim && aimAction.IsPressed() && !HoldingUnarmedOrKnife();
 
         if (!isArmed && virtualCamera != null)
         {
@@ -444,7 +481,12 @@ public class TopDownPlayerController : MonoBehaviour
         if (isCrouching)
             currentSpeed = crouchSpeed * CrouchSpeedMultiplier;
         else if (isSprinting && !isSprintLocked)
-            currentSpeed = sprintSpeed;
+            currentSpeed = Mathf.Lerp(walkSpeed, sprintSpeed, sprintBlend);
+
+        // เร่งความเร็ววิ่งทีละนิด (Slow Run → Fast Run) ปล่อยปุ่ม/หยุดเดิน = กลับเป็น 0
+        bool running = isWalking && isSprinting && !isSprintLocked && !isCrouching;
+        float rate = sprintAccelerationTime > 0f ? Time.deltaTime / sprintAccelerationTime : 1f;
+        sprintBlend = running ? Mathf.MoveTowards(sprintBlend, 1f, rate) : 0f;
 
         currentSpeed *= movementSpeedMultiplier;
 
@@ -693,17 +735,63 @@ public class TopDownPlayerController : MonoBehaviour
         isVaulting = false;
     }
 
+    // ------------------------------------------------------------ ปีนบันได
+    // หลักการ: ตำแหน่งตอนปีนคำนวณจาก "ตัวบันไดจริง" (Ladder.GetClimbPosition) ทุกเฟรม
+    //   แนวราบล็อกไว้กึ่งกลางบันได ห่างหน้าบันไดเท่า Stand Distance / แนวตั้งเลื่อนตามปุ่ม จำกัดไม่เกินยอดบันได
+    // เดิมใช้จุดเริ่มปีน + ชนบันไดด้วยรัศมีตัว + Ray หาขอบบน ทำให้ตัวลอยห่าง ไม่ตรงกลาง และออกด้านบนซ้อนหลายครั้ง
+
+    private Ladder climbingLadder;
+    private Collider climbingLadderCollider;
+    private bool isExitingLadderTop;
+    private float ladderLandingY = float.NaN; // ความสูงพื้นด้านบนบันได (หาไว้ตอนเริ่มปีน)
+
+    /// <summary>เริ่ม/เลิกปีน (กด E ที่บันไดซ้ำ = ปล่อยบันได)</summary>
     public void StartClimbing(Vector3 lookDirection, Transform startPoint)
+    {
+        StartClimbing(lookDirection, startPoint, null);
+    }
+
+    public void StartClimbing(Vector3 lookDirection, Transform startPoint, Ladder ladder)
     {
         if (isClimbing) { StopClimbing(); return; }
         if (climbCooldown > 0f) return;
 
         isClimbing = true;
-        transform.rotation = Quaternion.LookRotation(lookDirection);
+        isExitingLadderTop = false;
+        climbingLadder = ladder;
+        transform.rotation = Quaternion.LookRotation(ladder != null ? ladder.ClimbFacing : lookDirection);
+
+        // ระหว่างปีน ไม่ให้ CharacterController ชนตัวบันได (ไม่งั้นรัศมีตัวผู้เล่นดันออกห่างบันไดเสมอ)
+        if (ladder != null && ladder.ClimbCollider != null)
+        {
+            climbingLadderCollider = ladder.ClimbCollider;
+            Physics.IgnoreCollision(controller, climbingLadderCollider, true);
+        }
 
         if (animator != null) animator.SetBool(IsClimbingHash, true);
-        if (startPoint != null) StartCoroutine(SmoothClimbEntryRoutine(startPoint.position));
+
+        // พื้นด้านบนที่จะก้าวขึ้นไปยืน: เลยหน้าบันไดไป Top Exit Offset ที่ความสูงยอดบันได
+        ladderLandingY = float.NaN;
+        if (ladder != null)
+        {
+            Vector3 probe = ladder.GetClimbPosition(ladder.TopY + 2f) + ladder.ClimbFacing * topExitOffset;
+            if (Physics.Raycast(probe, Vector3.down, out RaycastHit landing, 4f, ~ladderLayer, QueryTriggerInteraction.Ignore))
+                ladderLandingY = landing.point.y;
+        }
+
+        Vector3 entry = startPoint != null ? startPoint.position : transform.position;
+        if (ladder != null)
+            entry = ladder.GetClimbPosition(Mathf.Clamp(entry.y, MinClimbCenterY(ladder), MaxClimbCenterY(ladder)));
+
+        StartCoroutine(SmoothClimbEntryRoutine(entry));
     }
+
+    // ช่วงที่จุดกลางตัวเลื่อนได้บนบันได: เท้าแตะพื้นล่าง ถึง เท้าอยู่ที่ยอดบันได (+ Top Reach Offset)
+    float MinClimbCenterY(Ladder ladder) => ladder.BottomY + FeetToCenter;
+    float MaxClimbCenterY(Ladder ladder) => ladder.TopY + ladder.topReachOffset + FeetToCenter;
+
+    /// <summary>ความสูงเท้าของผู้เล่น (ตัว Pivot อาจอยู่กลางตัว)</summary>
+    float FeetY => transform.position.y + controller.center.y - controller.height * 0.5f;
 
     IEnumerator SmoothClimbEntryRoutine(Vector3 targetPos)
     {
@@ -711,64 +799,143 @@ public class TopDownPlayerController : MonoBehaviour
 
         Vector3 startPos = transform.position;
         float timePassed = 0f;
-        float duration = 0.35f;
+        float duration = 0.25f;
 
         while (timePassed < 1f)
         {
             timePassed += Time.deltaTime / duration;
-            Vector3 nextPos = Vector3.Lerp(startPos, targetPos, timePassed);
-            Vector3 delta = nextPos - transform.position;
-            controller.Move(delta);
+            SetPositionDirect(Vector3.Lerp(startPos, targetPos, Mathf.Clamp01(timePassed)));
             yield return null;
         }
 
-        Vector3 finalDelta = targetPos - transform.position;
-        controller.Move(finalDelta);
-
+        SetPositionDirect(targetPos);
         SetMovementLocked(this, false);
+    }
+
+    // ย้ายตัวตรงๆ (ปิด CharacterController ชั่วคราว ไม่ให้ชนอะไรระหว่างจัดตำแหน่งบนบันได)
+    void SetPositionDirect(Vector3 position)
+    {
+        bool wasEnabled = controller.enabled;
+        controller.enabled = false;
+        transform.position = position;
+        controller.enabled = wasEnabled;
+    }
+
+    // เลิกปีน: ให้ชนบันไดได้ตามปกติอีกครั้ง
+    void RestoreLadderCollision()
+    {
+        if (climbingLadderCollider != null && controller != null)
+            Physics.IgnoreCollision(controller, climbingLadderCollider, false);
+
+        climbingLadderCollider = null;
+    }
+
+    // บันไดที่ไม่มีคอมโพเนนต์ Ladder (เก่า): ดึงตัวเข้าหาหน้าบันไดด้วย Ray แบบเดิม
+    void SnapToLadderByRay()
+    {
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.0001f)
+            return;
+        forward.Normalize();
+
+        Vector3 origin = transform.position + Vector3.up * ladderSnapRayHeight - forward * 0.5f;
+        if (!Physics.Raycast(origin, forward, out RaycastHit hit, 3f, ladderLayer, QueryTriggerInteraction.Ignore))
+            return;
+
+        if (climbingLadderCollider != hit.collider)
+        {
+            RestoreLadderCollision();
+            climbingLadderCollider = hit.collider;
+            Physics.IgnoreCollision(controller, climbingLadderCollider, true);
+        }
+
+        Vector3 target = hit.point - forward * ladderSnapDistance;
+        target.y = transform.position.y;
+        SetPositionDirect(target);
     }
 
     void HandleClimbing()
     {
+        if (isExitingLadderTop)
+            return; // กำลังก้าวขึ้นจากยอดบันได
+
         Vector2 moveInput = Vector2.zero;
         if (moveAction != null) moveInput = moveAction.ReadValue<Vector2>();
 
         float currentClimbSpeed = moveInput.y < 0 ? climbDownSpeed : climbUpSpeed;
-        Vector3 climbDirection = new Vector3(0f, moveInput.y, 0f);
+        float deltaY = moveInput.y * currentClimbSpeed * Time.deltaTime;
 
-        controller.Move(climbDirection * currentClimbSpeed * Time.deltaTime);
+        if (climbingLadder != null)
+        {
+            // แนวตั้งเลื่อนตามปุ่ม (จำกัดระหว่างพื้นล่างถึงยอดบันได) / แนวราบล็อกกึ่งกลางบันไดทุกเฟรม
+            float y = Mathf.Clamp(transform.position.y + deltaY, MinClimbCenterY(climbingLadder), MaxClimbCenterY(climbingLadder));
+            SetPositionDirect(climbingLadder.GetClimbPosition(y));
+            transform.rotation = Quaternion.LookRotation(climbingLadder.ClimbFacing);
+        }
+        else
+        {
+            controller.Move(new Vector3(0f, deltaY, 0f));
+            SnapToLadderByRay();
+        }
 
-        if (animator != null) animator.SetFloat(ClimbSpeedHash, moveInput.y);
+        // ความเร็วอนิเมชั่นตามความเร็วปีนจริง (มือ/เท้าไม่ไถลบนขั้นบันได) กดลง = เล่นถอยหลัง, ไม่กด = ค้างท่า
+        if (animator != null)
+        {
+            float animSpeed = climbAnimMetersPerSecond > 0f ? currentClimbSpeed / climbAnimMetersPerSecond : 1f;
+            animator.SetFloat(ClimbSpeedHash, moveInput.y * Mathf.Min(animSpeed, maxClimbAnimSpeed));
+        }
 
         CheckLadderExit(moveInput.y, moveInput.x);
     }
 
+    /// <summary>ระยะจากเท้าถึง Pivot ของผู้เล่น</summary>
+    float FeetToCenter => transform.position.y - FeetY;
+
     void CheckLadderExit(float verticalInput, float horizontalInput)
     {
-        bool isAtBottom = controller.isGrounded || Physics.Raycast(transform.position + (Vector3.up * 0.1f), Vector3.down, 0.4f, ~ladderLayer, QueryTriggerInteraction.Ignore);
+        // ล่างสุด: เท้าถึงพื้นล่างของบันได แล้วกดลงหรือกดซ้าย/ขวา = ลงจากบันได
+        bool isAtBottom = climbingLadder != null
+            ? transform.position.y <= MinClimbCenterY(climbingLadder) + 0.02f
+            : controller.isGrounded ||
+              Physics.Raycast(new Vector3(transform.position.x, FeetY + 0.1f, transform.position.z), Vector3.down, 0.25f, ~ladderLayer, QueryTriggerInteraction.Ignore);
 
-        if (isAtBottom)
+        if (isAtBottom && (verticalInput < 0 || Mathf.Abs(horizontalInput) > 0.1f))
         {
-            if (verticalInput < 0 || Mathf.Abs(horizontalInput) > 0.1f)
-            {
-                StopClimbing();
-                return;
-            }
+            StopClimbing();
+            return;
         }
 
-        if (verticalInput > 0)
+        if (verticalInput <= 0f || isExitingLadderTop)
+            return;
+
+        bool reachedTop;
+        if (climbingLadder != null)
+        {
+            // ถึงยอด: ตัวขึ้นไปถึงตำแหน่งสูงสุดที่บันไดอนุญาตแล้ว
+            reachedTop = transform.position.y >= MaxClimbCenterY(climbingLadder) - 0.01f;
+
+            // มีท่าปีนขึ้นขอบ: เริ่มท่าตอนมือถึงขอบพื้นด้านบน (เท้าต่ำกว่าพื้นด้านบน Top Exit Start Below Floor)
+            if (!reachedTop && !float.IsNaN(ladderLandingY) && TopExitClipLength() > 0f)
+                reachedTop = FeetY >= ladderLandingY - topExitStartBelowFloor;
+        }
+        else
         {
             Vector3 rayOrigin = transform.position + (Vector3.up * highRayHeight);
-            if (!Physics.Raycast(rayOrigin, transform.forward, 1.2f, ladderLayer, QueryTriggerInteraction.Ignore))
-            {
-                StartCoroutine(LadderTopExitRoutine());
-            }
+            reachedTop = !Physics.Raycast(rayOrigin, transform.forward, 1.2f, ladderLayer, QueryTriggerInteraction.Ignore);
         }
+
+        if (reachedTop)
+            StartCoroutine(LadderTopExitRoutine());
     }
 
     void StopClimbing()
     {
         isClimbing = false;
+        isExitingLadderTop = false;
+        climbingLadder = null;
+        ladderLandingY = float.NaN;
+        RestoreLadderCollision();
         climbCooldown = 0.5f;
         if (animator != null)
         {
@@ -777,28 +944,89 @@ public class TopDownPlayerController : MonoBehaviour
         }
     }
 
+    private static readonly int ClimbExitSpeedHash = Animator.StringToHash("ClimbExitSpeed");
+
+    // ความยาวคลิปท่าปีนขึ้นขอบใน Animator ของผู้เล่น (0 = ไม่มีคลิป)
+    float TopExitClipLength()
+    {
+        if (animator == null || animator.runtimeAnimatorController == null || string.IsNullOrEmpty(topExitClipName))
+            return 0f;
+
+        foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
+        {
+            if (clip != null && clip.name == topExitClipName)
+                return clip.length;
+        }
+
+        return 0f;
+    }
+
+    bool HasAnimatorParameter(int hash)
+    {
+        foreach (AnimatorControllerParameter parameter in animator.parameters)
+            if (parameter.nameHash == hash) return true;
+        return false;
+    }
+
+    // ก้าวขึ้นจากยอดบันไดไปยืนบนพื้นด้านบน (เริ่มได้ครั้งเดียวต่อการปีน)
+    // มีคลิป MigeClimbingEdge: เล่นท่าเอาแขนค้ำขอบแล้วดันตัวขึ้น และเลื่อนตัวตามจังหวะท่า (ยกตัวช่วงแรก → เดินหน้าช่วงหลัง)
     IEnumerator LadderTopExitRoutine()
     {
+        isExitingLadderTop = true;
         SetMovementLocked(this, true);
-        if (animator != null) animator.SetTrigger(ClimbTopExitHash);
+
+        float clipLength = TopExitClipLength();
+        bool useEdgeClip = clipLength > 0f;
+
+        if (animator != null)
+        {
+            if (useEdgeClip && HasAnimatorParameter(ClimbExitSpeedHash))
+                animator.SetFloat(ClimbExitSpeedHash, topExitAnimSpeed);
+
+            animator.SetTrigger(ClimbTopExitHash);
+            // ปิด IsClimbing ทันที ไม่ให้ Any State → Climb ดึงกลับไปท่าปีนระหว่างเล่นท่าขึ้นขอบ
+            animator.SetBool(IsClimbingHash, false);
+        }
 
         Vector3 startPos = transform.position;
-        Vector3 targetPos = transform.position + (Vector3.up * 1.2f) + (transform.forward * topExitOffset);
-        float timePassed = 0f;
-        float duration = 0.5f;
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        forward.Normalize();
 
-        while (timePassed < 1f)
+        // จุดยืนด้านบน: เลยหน้าบันไดไป Top Exit Offset แล้วหาพื้นข้างใต้ / ไม่เจอพื้น = ใช้ความสูงคงที่แบบเดิม
+        Vector3 landing = startPos + forward * topExitOffset;
+        Vector3 targetPos = startPos + Vector3.up * 1.2f + forward * topExitOffset;
+        if (Physics.Raycast(landing + Vector3.up * 3f, Vector3.down, out RaycastHit floor, 6f, ~ladderLayer, QueryTriggerInteraction.Ignore))
+            targetPos = new Vector3(landing.x, floor.point.y + FeetToCenter + 0.05f, landing.z);
+
+        // ขึ้นก่อนแล้วค่อยเดินหน้า (ไม่ให้ตัวชนขอบพื้นด้านบน)
+        float duration = useEdgeClip ? clipLength / Mathf.Max(0.1f, topExitAnimSpeed) : 0.5f;
+
+        // จังหวะจากท่า MigeClimbingEdge (วัดจากคลิป): ตัวยกขึ้นช่วง 10–55% ของท่า, เดินหน้าช่วง 20–95%
+        // ไม่มีคลิป: ยกครึ่งแรก เดินหน้าครึ่งหลังแบบเดิม
+        Vector2 riseRange = useEdgeClip ? new Vector2(0.10f, 0.55f) : new Vector2(0f, 0.5f);
+        Vector2 forwardRange = useEdgeClip ? new Vector2(0.20f, 0.95f) : new Vector2(0.5f, 1f);
+        Vector3 flatStart = new Vector3(startPos.x, 0f, startPos.z);
+        Vector3 flatTarget = new Vector3(targetPos.x, 0f, targetPos.z);
+        float riseTo = Mathf.Max(startPos.y, targetPos.y);
+
+        for (float time = 0f; time < 1f; time += Time.deltaTime / duration)
         {
-            timePassed += Time.deltaTime / duration;
-            Vector3 nextPos = Vector3.Lerp(startPos, targetPos, timePassed);
-            Vector3 delta = nextPos - transform.position;
-            controller.Move(delta);
+            float rise = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(riseRange.x, riseRange.y, time));
+            float move = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(forwardRange.x, forwardRange.y, time));
+
+            // ยังไม่สูงพอพ้นขอบพื้น = ห้ามเดินหน้า (กันตัวทะลุขอบ)
+            if (rise < 0.98f)
+                move = Mathf.Min(move, 0.35f);
+
+            Vector3 flat = Vector3.Lerp(flatStart, flatTarget, move);
+            float y = Mathf.Lerp(startPos.y, riseTo, rise);
+            if (move > 0.99f) y = targetPos.y;
+            SetPositionDirect(new Vector3(flat.x, y, flat.z));
             yield return null;
         }
 
-        Vector3 finalDelta = targetPos - transform.position;
-        controller.Move(finalDelta);
-
+        SetPositionDirect(targetPos);
         StopClimbing();
         SetMovementLocked(this, false);
     }
@@ -810,6 +1038,20 @@ public class TopDownPlayerController : MonoBehaviour
 
         animator.SetBool(IsWalkHash, isWalking);
         animator.SetBool(IsSneakHash, isCrouching);
+
+        // ท่าวิ่ง: ส่งค่าเฉพาะเมื่อ Animator มีพารามิเตอร์ (ไม่งั้น Unity เตือนทุกเฟรม)
+        if (!checkedRunParams)
+        {
+            checkedRunParams = true;
+            foreach (AnimatorControllerParameter parameter in animator.parameters)
+                if (parameter.nameHash == RunBlendHash) hasRunParams = true;
+        }
+
+        if (hasRunParams)
+        {
+            animator.SetBool(IsRunHash, isWalking && isSprinting && !isSprintLocked && !isCrouching);
+            animator.SetFloat(RunBlendHash, sprintBlend, 0.1f, Time.deltaTime);
+        }
     }
 
     private void OnDrawGizmosSelected()

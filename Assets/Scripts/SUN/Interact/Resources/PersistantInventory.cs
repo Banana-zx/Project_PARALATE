@@ -124,6 +124,23 @@ public class PersistentInventory : MonoBehaviour
         return true;
     }
 
+    /// <summary>แทนที่ของทั้งหมดในคลัง (ใช้ตอนโหลดเซฟ)</summary>
+    public void ReplaceAll(IEnumerable<KeyValuePair<string, int>> items)
+    {
+        owned.Clear();
+        if (items != null)
+        {
+            foreach (KeyValuePair<string, int> pair in items)
+            {
+                if (!string.IsNullOrEmpty(pair.Key) && pair.Value > 0)
+                    owned[pair.Key] = pair.Value;
+            }
+        }
+
+        Save();
+        OnChanged?.Invoke();
+    }
+
     // ------------------------------------------------------------ Save / Load
 
     private void Load()
@@ -181,6 +198,7 @@ public class PersistentInventory : MonoBehaviour
         XGearLoadout.ResetSave();
         WeaponUpgrades.ResetSave();
         GameLog.ResetSave();
+        CommandBook.ResetSave();
         PlayerPrefs.Save();
         Debug.Log("Reset inventory / X-Gear / weapon upgrade save แล้ว");
     }
@@ -199,6 +217,14 @@ public class PersistentInventory : MonoBehaviour
         Instance.Add(ItemCatalog.ChipFleetFoot, 1);
         Instance.Add(ItemCatalog.ChipInvisible, 1);
         Instance.Add(ItemCatalog.MapHideOut, 1);
+        Instance.Add(ItemCatalog.Medkit, 3);
+        Instance.Add(ItemCatalog.XGearCell, 2);
+        Instance.Add(ItemCatalog.WeaponUsp, 1);
+        Instance.Add(ItemCatalog.WeaponSniper, 1);
+        Instance.Add(ItemCatalog.WeaponAk, 1);
+
+        foreach (string id in new[] { ItemCatalog.Medkit, ItemCatalog.XGearCell, ItemCatalog.WeaponUsp, ItemCatalog.WeaponSniper, ItemCatalog.WeaponAk })
+            CommandBook.LearnFromItem(id);
     }
 #endif
 }

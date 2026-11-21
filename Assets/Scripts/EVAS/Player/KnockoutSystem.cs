@@ -2,16 +2,22 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections;
 
+/// <summary>
+/// ระบบจู่โจมจากด้านหลัง (ทำได้เมื่อศัตรูยังไม่รู้ตัว: ไม่ได้ Alert และผู้เล่นอยู่นอกกรวยสายตา)
+///
+///   1) กด F ด้านหลังศัตรู → เข้าสถานะ Strangle (ล็อกตัวกันทั้งคู่) แล้วเลือกต่อ:
+///   2a) กด F อีกครั้ง      → เอามีดแทงคอ ศัตรูตาย ศพนอนอยู่บนพื้น (มีมีดในคลัง = เร็วขึ้น)
+///   2b) กด Ctrl ค้าง X วินาที → รัดคอจนหมดสติ ร่างหายไปจากฉาก (X ตั้งที่ EnemyHealth.chokeHoldSeconds ตามชนิดศัตรู)
+///       ปล่อย Ctrl ก่อนครบ = หลอดเริ่มใหม่ แต่ยังรัดคออยู่
+///   ไม่ทำอะไรนานเกิน Strangle Timeout → ศัตรูดิ้นหลุดและไล่ล่าผู้เล่น
+///
+/// อนิเมชั่น: ตั้งชื่อ Trigger ไว้ด้านล่าง ถ้าใน Animator Controller ของผู้เล่น/ศัตรูมี Trigger ชื่อนั้นจะเล่นให้เอง
+/// (ยังไม่มีคลิป = ข้ามไป ระบบยังทำงานด้วยเวลาที่ตั้งไว้)
+/// </summary>
 [RequireComponent(typeof(PlayerInput))]
 public class KnockoutSystem : MonoBehaviour
 {
-    public enum StealthActionType
-    {
-        KillWithoutKnife,
-        KillWithKnife,
-        KnockoutWithoutKnife,
-        KnockoutWithKnife
-    }
+    private enum State { Idle, Strangle, Stab, Choke }
 
     [Header("Range")]
     public float actionRange = 2f;
@@ -21,20 +27,42 @@ public class KnockoutSystem : MonoBehaviour
 
     [Header("Stealth Rules")]
     public bool requireTargetOutsideVisionCone = true;
+    [Tooltip("ศัตรูที่ Alert/ไล่ล่าอยู่ จู่โจมไม่ได้")]
+    public bool requireEnemyUnaware = true;
 
-    [Header("Kill Delays (F)")]
-    public float killDelayWithoutKnife = 5f;
-    public float killDelayWithKnife = 2f;
+    [Header("Strangle (F)")]
+    [Tooltip("ค้างอยู่ในท่า Strangle โดยไม่เลือกอะไรนานเท่านี้ ศัตรูจะดิ้นหลุด (0 = ไม่หลุด)")]
+    [Min(0f)] public float strangleTimeout = 6f;
+    [Tooltip("ศัตรูดิ้นหลุดแล้วไล่ล่าอย่างน้อยกี่วินาที")]
+    public float breakFreeChaseTime = 4f;
 
-    [Header("Knockout Hold (Ctrl)")]
-    public float knockoutHoldDuration = 3f;
+    [Header("Kill: แทงคอ (F ระหว่าง Strangle)")]
+    public float stabDuration = 1.4f;
+    [Tooltip("มีมีดในคลัง: เวลาแทงคูณค่านี้")]
+    [Range(0.1f, 1f)] public float knifeOwnedMultiplier = 0.6f;
 
-    [Header("Knockout Stun Duration")]
-    public float knockoutStunDuration = 10f;
+    [Header("Knockout: รัดคอ (Ctrl ค้างระหว่าง Strangle)")]
+    [Tooltip("ใช้เมื่อศัตรูไม่มี EnemyHealth.chokeHoldSeconds")]
+    public float defaultChokeHoldSeconds = 3f;
+    [Tooltip("ครบเวลาแล้ว รออนิเมชั่นจบกี่วินาทีก่อนร่างหาย")]
+    public float chokeFinishDelay = 0.8f;
+
+    [Header("Animation Triggers (ผู้เล่น)")]
+    public string playerStrangleTrigger = "Strangle";
+    public string playerStabTrigger = "StabKill";
+    public string playerChokeTrigger = "Choke";
+    public string playerReleaseTrigger = "StrangleRelease";
+
+    [Header("Animation Triggers (ศัตรู)")]
+    public string enemyStrangledTrigger = "Strangled";
+    public string enemyStabbedTrigger = "StabbedDeath";
+    public string enemyChokedTrigger = "Choked";
 
     [Header("UI")]
     [Tooltip("ไม่บังคับ: ถ้าเว้นว่างจะหา KnockoutPromptUI ใน Scene เอง")]
     public KnockoutPromptUI promptUI;
+    public string approachPrompt = "[F] to Strangle";
+    public string stranglePrompt = "[F] Kill   [Ctrl hold] Knockout";
     [Tooltip("ความถี่ในการเช็คว่าอยู่ข้างหลังศัตรูหรือไม่ (วินาที)")]
     public float promptCheckInterval = 0.1f;
 
@@ -44,16 +72,17 @@ public class KnockoutSystem : MonoBehaviour
     private InputAction killAction;
     private InputAction knockOutAction;
     private TopDownPlayerController movementController;
-    private PickupSystem pickupSystem;
-    private bool isPerformingAction;
-    private bool isHoldingKnockout;
-    private float knockoutHoldTimer;
-    private EnemyHealth knockoutTarget;
-    private StealthActionType currentKnockoutType;
+
+    private State state = State.Idle;
+    private EnemyHealth target;
+    private float strangleTimer;
+    private float chokeTimer;
+    private bool chokeHolding;
     private float promptCheckTimer;
     private bool promptShown;
 
-    public bool IsKnockout => isPerformingAction || isHoldingKnockout;
+    /// <summary>กำลังจู่โจมอยู่ (ระบบอื่นใช้กันการเปลี่ยนอาวุธ/ยิง)</summary>
+    public bool IsKnockout => state != State.Idle;
 
     void Awake()
     {
@@ -61,7 +90,6 @@ public class KnockoutSystem : MonoBehaviour
         killAction = playerInput.actions["Kill"];
         knockOutAction = playerInput.actions["KnockOut"];
         movementController = GetComponent<TopDownPlayerController>();
-        pickupSystem = GetComponent<PickupSystem>();
     }
 
     void Start()
@@ -72,39 +100,43 @@ public class KnockoutSystem : MonoBehaviour
 
     void OnDisable()
     {
-        SetPromptVisible(false);
+        if (state != State.Idle)
+            Release(false);
 
-        if (promptUI != null)
-            promptUI.EndCountdown();
+        SetPromptVisible(false);
+        promptUI?.EndCountdown();
     }
 
     void Update()
     {
-        if (movementController != null && movementController.IsMovementLocked && !isHoldingKnockout)
+        if (PlayerHealth.PlayerIsDead)
+        {
+            if (state != State.Idle)
+                Release(false);
+            SetPromptVisible(false);
+            return;
+        }
+
+        switch (state)
+        {
+            case State.Idle: UpdateIdle(); break;
+            case State.Strangle: UpdateStrangle(); break;
+        }
+    }
+
+    // ------------------------------------------------------------ Idle: หาเป้าหมายด้านหลัง
+
+    void UpdateIdle()
+    {
+        if (movementController != null && movementController.IsMovementLocked)
         {
             SetPromptVisible(false);
             return;
         }
 
-        if (isPerformingAction)
-            return;
-
-        if (killAction.WasPressedThisFrame())
-            TryKill();
-
-        HandleKnockoutHold();
-        UpdateActionPrompt();
-    }
-
-    // โชว์ "LeftCtrl to mercy / F to kill" เมื่อมีศัตรูที่ลงมือได้อยู่ตรงหน้า (เงื่อนไขเดียวกับตอนกดปุ่มจริง)
-    void UpdateActionPrompt()
-    {
-        if (promptUI == null)
-            return;
-
-        if (IsKnockout)
+        if (killAction.WasPressedThisFrame() && Time.timeScale > 0f && TryGetTarget(out EnemyHealth enemy))
         {
-            SetPromptVisible(false);
+            BeginStrangle(enemy);
             return;
         }
 
@@ -113,152 +145,205 @@ public class KnockoutSystem : MonoBehaviour
             return;
 
         promptCheckTimer = promptCheckInterval;
-        SetPromptVisible(TryGetTarget(out _));
+        bool canAct = TryGetTarget(out _);
+        if (canAct)
+            promptUI?.SetPromptText(approachPrompt);
+        SetPromptVisible(canAct);
     }
 
-    void SetPromptVisible(bool visible)
+    void BeginStrangle(EnemyHealth enemy)
     {
-        if (promptUI == null || promptShown == visible)
-            return;
+        state = State.Strangle;
+        target = enemy;
+        strangleTimer = 0f;
+        chokeTimer = 0f;
+        chokeHolding = false;
 
-        promptShown = visible;
-        promptUI.SetPromptVisible(visible);
+        SetPlayerMovementLocked(true);
+        SetEnemyMovementLocked(enemy, true);
+        FaceTarget(enemy);
+
+        Trigger(PlayerAnimator, playerStrangleTrigger);
+        Trigger(EnemyAnimator(enemy), enemyStrangledTrigger);
+        SfxLibrary.Play("strangle", enemy.transform.position);
+
+        promptUI?.SetPromptText(stranglePrompt);
+        SetPromptVisible(true, true);
     }
 
-    void TryKill()
+    // ------------------------------------------------------------ Strangle: เลือก Kill / Knockout
+
+    void UpdateStrangle()
     {
-        if (!TryGetTarget(out EnemyHealth enemy))
-            return;
-
-        bool hasKnife = pickupSystem != null && pickupSystem.HasKnifeEquipped;
-        StealthActionType actionType = hasKnife
-            ? StealthActionType.KillWithKnife
-            : StealthActionType.KillWithoutKnife;
-
-        StartCoroutine(KillSequence(enemy, actionType));
-    }
-
-    void HandleKnockoutHold()
-    {
-        if (knockOutAction.WasPressedThisFrame() && !isHoldingKnockout)
+        if (target == null || target.IsDead)
         {
-            if (!TryGetTarget(out EnemyHealth enemy) || enemy.IsStunned)
-                return;
-
-            bool hasKnife = pickupSystem != null && pickupSystem.HasKnifeEquipped;
-            isHoldingKnockout = true;
-            knockoutHoldTimer = 0f;
-            knockoutTarget = enemy;
-            currentKnockoutType = hasKnife
-                ? StealthActionType.KnockoutWithKnife
-                : StealthActionType.KnockoutWithoutKnife;
-
-            SetEnemyMovementLocked(knockoutTarget, true);
-            SetPlayerMovementLocked(true);
-
-            SetPromptVisible(false);
-            if (promptUI != null)
-                promptUI.BeginCountdown(false, knockoutHoldDuration);
-
-            Debug.Log(GetKnockoutHoldStartMessage(currentKnockoutType, knockoutHoldDuration));
-        }
-
-        if (!isHoldingKnockout)
-            return;
-
-        if (!knockOutAction.IsPressed())
-        {
-            CancelKnockoutHold("ปล่อย Ctrl ก่อนครบเวลา — ศัตรูไม่สลบ");
+            Release(false);
             return;
         }
 
-        if (!IsTargetStillValid(knockoutTarget))
+        if (Time.timeScale <= 0f)
+            return; // เมนูเปิดอยู่
+
+        if (killAction.WasPressedThisFrame())
         {
-            CancelKnockoutHold("เป้าหมายไม่ถูกต้อง — ยกเลิกการรัดคอ");
+            StartCoroutine(StabRoutine());
             return;
         }
 
-        knockoutHoldTimer += Time.deltaTime;
+        HandleChokeHold();
+        if (state != State.Strangle)
+            return;
 
-        if (promptUI != null)
-            promptUI.SetRemaining(knockoutHoldDuration - knockoutHoldTimer);
-
-        if (knockoutHoldTimer >= knockoutHoldDuration)
-            CompleteKnockout();
+        // นับเวลาดิ้นหลุดเฉพาะตอนไม่ได้กด Ctrl
+        if (!chokeHolding && strangleTimeout > 0f)
+        {
+            strangleTimer += Time.deltaTime;
+            if (strangleTimer >= strangleTimeout)
+                Release(true);
+        }
     }
 
-    void CompleteKnockout()
+    void HandleChokeHold()
     {
-        if (knockoutTarget != null)
+        float holdSeconds = target.chokeHoldSeconds > 0f ? target.chokeHoldSeconds : defaultChokeHoldSeconds;
+
+        if (knockOutAction.IsPressed())
         {
-            // EnemyHealth ล็อกศัตรูด้วย key ของตัวเองตอนสลบ จึงปลดเฉพาะล็อกของระบบนี้ได้เลย
-            knockoutTarget.KnockOut(knockoutStunDuration);
-            SfxLibrary.Play("knockout", knockoutTarget.transform.position);
-            Debug.Log(GetKnockoutSuccessMessage(currentKnockoutType));
+            if (!chokeHolding)
+            {
+                chokeHolding = true;
+                chokeTimer = 0f;
+                promptUI?.BeginCountdown(false, holdSeconds);
+            }
+
+            chokeTimer += Time.deltaTime;
+            promptUI?.SetRemaining(holdSeconds - chokeTimer);
+
+            if (chokeTimer >= holdSeconds)
+                StartCoroutine(ChokeRoutine());
+
+            return;
         }
 
-        if (promptUI != null)
-            promptUI.EndCountdown();
-
-        ResetKnockoutHold(true);
+        if (chokeHolding)
+        {
+            // ปล่อยก่อนครบ: หลอดเริ่มใหม่ แต่ยังรัดคออยู่
+            chokeHolding = false;
+            chokeTimer = 0f;
+            promptUI?.ReleaseEarly();
+        }
     }
 
-    void CancelKnockoutHold(string reason)
+    IEnumerator StabRoutine()
     {
-        EnemyHealth failedTarget = knockoutTarget;
+        state = State.Stab;
+        EnemyHealth enemy = target;
+        SetPromptVisible(false, true);
 
-        Debug.Log(reason);
+        bool ownsKnife = PersistentInventory.Instance != null && PersistentInventory.Instance.Has(ItemCatalog.WeaponKnife);
+        float duration = stabDuration * (ownsKnife ? knifeOwnedMultiplier : 1f);
 
-        // ปล่อยก่อนเสร็จ: หลอดค่อยๆ เพิ่มกลับจนเต็มแล้วซ่อน
-        if (promptUI != null)
-            promptUI.ReleaseEarly();
+        Trigger(PlayerAnimator, playerStabTrigger);
+        Trigger(EnemyAnimator(enemy), enemyStabbedTrigger);
+        promptUI?.BeginCountdown(true, duration);
 
-        ResetKnockoutHold(true);
-        StartEnemyChase(failedTarget, 3f);
+        float remaining = duration;
+        while (remaining > 0f)
+        {
+            remaining -= Time.deltaTime;
+            promptUI?.SetRemaining(Mathf.Max(0f, remaining));
+            yield return null;
+        }
+
+        promptUI?.EndCountdown();
+
+        if (enemy != null && !enemy.IsDead)
+        {
+            enemy.Kill(EnemyHealth.DeathAction.FallOver); // ศพนอนบนพื้น
+            SfxLibrary.Play("stealth_kill", enemy.transform.position);
+        }
+
+        Finish(enemy);
     }
 
-    void ResetKnockoutHold(bool unlockTarget = true)
+    IEnumerator ChokeRoutine()
     {
-        if (unlockTarget)
-            SetEnemyMovementLocked(knockoutTarget, false);
+        state = State.Choke;
+        EnemyHealth enemy = target;
+        SetPromptVisible(false, true);
+        promptUI?.EndCountdown();
 
-        isHoldingKnockout = false;
-        knockoutHoldTimer = 0f;
-        knockoutTarget = null;
+        Trigger(PlayerAnimator, playerChokeTrigger);
+        Trigger(EnemyAnimator(enemy), enemyChokedTrigger);
+
+        yield return new WaitForSeconds(chokeFinishDelay);
+
+        if (enemy != null && !enemy.IsDead)
+        {
+            SfxLibrary.Play("knockout", enemy.transform.position);
+            enemy.Vanish(); // ร่างจากการรัดคอหายไปจากฉาก
+        }
+
+        Finish(enemy);
+    }
+
+    // จบการจู่โจม (สำเร็จ): ปลดล็อกผู้เล่น
+    void Finish(EnemyHealth enemy)
+    {
+        SetEnemyMovementLocked(enemy, false);
+        target = null;
+        state = State.Idle;
+        chokeHolding = false;
         SetPlayerMovementLocked(false);
     }
 
-    bool TryGetTarget(out EnemyHealth enemy)
+    /// <summary>ปล่อยศัตรู (ยกเลิก) breakFree = ศัตรูดิ้นหลุดแล้วไล่ล่าผู้เล่น</summary>
+    void Release(bool breakFree)
     {
-        enemy = null;
+        StopAllCoroutines();
+        EnemyHealth enemy = target;
 
-        Vector3 attackOrigin = transform.position
-                               + (transform.right * actionRaycastOffset.x)
-                               + (transform.up * actionRaycastOffset.y)
-                               + (transform.forward * actionRaycastOffset.z);
+        promptUI?.EndCountdown();
+        SetPromptVisible(false, true);
+        Trigger(PlayerAnimator, playerReleaseTrigger);
 
-        if (!TryFindEnemyInActionArc(attackOrigin, transform.forward, out enemy))
-            return false;
+        SetEnemyMovementLocked(enemy, false);
+        target = null;
+        state = State.Idle;
+        chokeHolding = false;
+        SetPlayerMovementLocked(false);
 
-        return true;
+        if (breakFree)
+            StartEnemyChase(enemy, breakFreeChaseTime);
     }
 
-    bool IsTargetStillValid(EnemyHealth enemy)
-    {
-        if (enemy == null || enemy.IsStunned || !CanTarget(enemy))
-            return false;
+    // ------------------------------------------------------------ เป้าหมาย
 
-        return TryGetTarget(out EnemyHealth currentTarget) && currentTarget == enemy;
+    bool TryGetTarget(out EnemyHealth enemy)
+    {
+        Vector3 origin = transform.position
+                         + (transform.right * actionRaycastOffset.x)
+                         + (transform.up * actionRaycastOffset.y)
+                         + (transform.forward * actionRaycastOffset.z);
+
+        return TryFindEnemyInActionArc(origin, transform.forward, out enemy);
     }
 
     bool CanTarget(EnemyHealth enemy)
     {
-        if (enemy.IsDead)
+        if (enemy == null || enemy.IsDead || !enemy.gameObject.activeInHierarchy)
             return false;
 
-        // ศัตรูที่สลบ: เข้าไปกด F ฆ่าได้จากทุกทิศ (รัดคอซ้ำไม่ได้ ดู HandleKnockoutHold)
+        // ศัตรูที่สลบ (จากระบบอื่น): จู่โจมได้จากทุกทิศ
         if (enemy.IsStunned)
             return true;
+
+        if (requireEnemyUnaware)
+        {
+            AlertState alert = enemy.GetComponent<AlertState>();
+            if (alert != null && alert.IsAlert)
+                return false;
+        }
 
         if (!requireTargetOutsideVisionCone)
             return true;
@@ -277,19 +362,14 @@ public class KnockoutSystem : MonoBehaviour
             if (!Physics.Raycast(origin, direction, out RaycastHit hit, actionRange, targetMask, QueryTriggerInteraction.Ignore))
                 return false;
 
-            enemy = GetValidEnemyFromCollider(hit.collider);
-            return enemy != null;
+            if (hit.collider.transform.IsChildOf(transform))
+                return false;
+
+            enemy = hit.collider.GetComponentInParent<EnemyHealth>();
+            return CanTarget(enemy);
         }
 
-        int hitCount = Physics.SphereCastNonAlloc(
-            origin,
-            actionRadius,
-            direction,
-            actionHits,
-            actionRange,
-            targetMask,
-            QueryTriggerInteraction.Ignore);
-
+        int hitCount = Physics.SphereCastNonAlloc(origin, actionRadius, direction, actionHits, actionRange, targetMask, QueryTriggerInteraction.Ignore);
         if (hitCount == 0)
             return false;
 
@@ -298,98 +378,54 @@ public class KnockoutSystem : MonoBehaviour
         for (int i = 0; i < hitCount; i++)
         {
             Collider hitCollider = actionHits[i].collider;
-
             if (hitCollider == null || hitCollider.transform.IsChildOf(transform))
                 continue;
 
             enemy = hitCollider.GetComponentInParent<EnemyHealth>();
-            return enemy != null && CanTarget(enemy);
+            return CanTarget(enemy);
         }
 
         enemy = null;
         return false;
     }
 
-    EnemyHealth GetValidEnemyFromCollider(Collider targetCollider)
-    {
-        if (targetCollider == null || targetCollider.transform.IsChildOf(transform))
-            return null;
+    // ------------------------------------------------------------ ตัวช่วย
 
-        EnemyHealth enemy = targetCollider.GetComponentInParent<EnemyHealth>();
-        return enemy != null && CanTarget(enemy) ? enemy : null;
+    void FaceTarget(EnemyHealth enemy)
+    {
+        Vector3 toEnemy = enemy.transform.position - transform.position;
+        toEnemy.y = 0f;
+        if (toEnemy.sqrMagnitude > 0.001f)
+            transform.rotation = Quaternion.LookRotation(toEnemy);
     }
 
-    IEnumerator KillSequence(EnemyHealth enemy, StealthActionType actionType)
+    Animator PlayerAnimator => movementController != null ? movementController.animator : GetComponentInChildren<Animator>();
+
+    static Animator EnemyAnimator(EnemyHealth enemy) => enemy != null ? enemy.GetComponentInChildren<Animator>() : null;
+
+    /// <summary>เล่น Trigger ถ้า Animator มีพารามิเตอร์ชื่อนี้ (ยังไม่ได้ใส่คลิป = ข้าม ไม่ขึ้น Warning)</summary>
+    static void Trigger(Animator animator, string trigger)
     {
-        isPerformingAction = true;
-        SetPromptVisible(false);
-        SetPlayerMovementLocked(true);
-        SetEnemyMovementLocked(enemy, true);
+        if (animator == null || string.IsNullOrEmpty(trigger) || animator.runtimeAnimatorController == null)
+            return;
 
-        float delay = actionType == StealthActionType.KillWithKnife
-            ? killDelayWithKnife
-            : killDelayWithoutKnife;
-
-        Debug.Log(GetKillStartMessage(actionType, delay));
-
-        // นับถอยหลังพร้อมอัปเดตหลอด (เวลารวมเท่าเดิมกับ WaitForSeconds(delay))
-        if (promptUI != null)
-            promptUI.BeginCountdown(true, delay);
-
-        float remaining = delay;
-        while (remaining > 0f)
+        foreach (AnimatorControllerParameter parameter in animator.parameters)
         {
-            remaining -= Time.deltaTime;
-
-            if (promptUI != null)
-                promptUI.SetRemaining(Mathf.Max(0f, remaining));
-
-            yield return null;
+            if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == trigger)
+            {
+                animator.SetTrigger(trigger);
+                return;
+            }
         }
-
-        if (promptUI != null)
-            promptUI.EndCountdown();
-
-        if (enemy != null)
-        {
-            enemy.TakeDamage(9999f);
-            SfxLibrary.Play("stealth_kill", enemy.transform.position);
-            Debug.Log(GetKillSuccessMessage(actionType));
-        }
-
-        // ปลดเฉพาะล็อกของระบบนี้ ถ้าศัตรูตายแล้ว EnemyHealth จะยังล็อกไว้เอง
-        SetEnemyMovementLocked(enemy, false);
-
-        SetPlayerMovementLocked(false);
-        isPerformingAction = false;
     }
 
-    static string GetKillStartMessage(StealthActionType actionType, float delay)
+    void SetPromptVisible(bool visible, bool force = false)
     {
-        return actionType == StealthActionType.KillWithKnife
-            ? $"กำลังฆ่าด้วยมีด... รอ {delay} วินาที"
-            : $"กำลังฆ่าโดยไม่ใช้มีด... รอ {delay} วินาที";
-    }
+        if (promptUI == null || (!force && promptShown == visible))
+            return;
 
-    static string GetKnockoutHoldStartMessage(StealthActionType actionType, float holdDuration)
-    {
-        return actionType == StealthActionType.KnockoutWithKnife
-            ? $"กำลังรัดคอด้วยมีด... กด Ctrl ค้าง {holdDuration} วินาที"
-            : $"กำลังรัดคอ... กด Ctrl ค้าง {holdDuration} วินาที";
-    }
-
-    static string GetKillSuccessMessage(StealthActionType actionType)
-    {
-        return actionType == StealthActionType.KillWithKnife
-            ? "ฆ่าด้วยมีดสำเร็จ!"
-            : "ฆ่าโดยไม่ใช้มีดสำเร็จ!";
-    }
-
-    static string GetKnockoutSuccessMessage(StealthActionType actionType)
-    {
-        return actionType == StealthActionType.KnockoutWithKnife
-            ? "รัดคอด้วยมีดสำเร็จ! ศัตรูสลบ"
-            : "รัดคอสำเร็จ! ศัตรูสลบ";
+        promptShown = visible;
+        promptUI.SetPromptVisible(visible);
     }
 
     void SetPlayerMovementLocked(bool locked)
@@ -416,9 +452,13 @@ public class KnockoutSystem : MonoBehaviour
         if (enemy == null || enemy.IsDead || enemy.IsStunned)
             return;
 
-        EnemyController enemyController = enemy.GetComponent<EnemyController>();
-        if (enemyController != null)
-            enemyController.StartChase(minimumChaseTime);
+        AlertState alert = enemy.GetComponent<AlertState>();
+        TopDownPlayerController player = FindAnyObjectByType<TopDownPlayerController>();
+
+        if (alert != null && player != null)
+            alert.ReceiveSpotterReport(player.transform.position, minimumChaseTime);
+        else
+            enemy.GetComponent<EnemyController>()?.StartChase(minimumChaseTime);
     }
 
     private void OnDrawGizmosSelected()

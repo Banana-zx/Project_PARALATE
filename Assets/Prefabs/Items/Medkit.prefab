@@ -126,7 +126,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InventoryPickup
   itemId: medkit
-  amount: 30
+  amount: 1
   promptFormat: '[ E ] to collect
 
     {0} x{1}'

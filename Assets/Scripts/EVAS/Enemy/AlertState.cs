@@ -213,12 +213,14 @@ public class AlertState : MonoBehaviour
             return;
         }
 
-        AddStatePoint(amount * Mathf.Pow(paranoidGainMultiplier, paranoidLevel));
+        // Paranoid รายตัว (ยกกำลังตามระดับ) x Paranoid ทั้งด่าน (LevelParanoia)
+        AddStatePoint(amount * Mathf.Pow(paranoidGainMultiplier, paranoidLevel) * LevelParanoia.GainMultiplier);
     }
 
     public void ReceiveReinforcement(Vector3 sourcePosition)
     {
-        if (PlayerHealth.PlayerIsDead)
+        // ศัตรูที่ถูกรัดคอจนร่างหาย (ปิดวัตถุไปแล้ว) ห้ามสั่งเดิน
+        if (PlayerHealth.PlayerIsDead || !isActiveAndEnabled)
             return;
 
         lastKnownPlayerPosition = sourcePosition;
@@ -232,7 +234,7 @@ public class AlertState : MonoBehaviour
     /// </summary>
     public void ReceiveSpotterReport(Vector3 playerPosition, float minimumChaseTime)
     {
-        if ((health != null && health.IsDead) || PlayerHealth.PlayerIsDead)
+        if (!isActiveAndEnabled || (health != null && health.IsDead) || PlayerHealth.PlayerIsDead)
             return;
 
         lastKnownPlayerPosition = playerPosition;
@@ -273,7 +275,8 @@ public class AlertState : MonoBehaviour
 
     private void AddSeenPlayerPoint(float amount)
     {
-        AddStatePoint(amount);
+        // เห็นด้วยตา: ได้ผลจาก Paranoid ทั้งด่าน (ทั้งฐานตื่นตัว มองเห็นแล้วจับได้ไวขึ้น)
+        AddStatePoint(amount * LevelParanoia.GainMultiplier);
     }
 
     private void AddStatePoint(float amount)
@@ -316,7 +319,7 @@ public class AlertState : MonoBehaviour
     {
         returnDecreaseTimer += Time.deltaTime;
 
-        float adjustedInterval = returnDecreaseInterval * (1f + paranoidLevel * paranoidReturnSlowdownPerLevel);
+        float adjustedInterval = returnDecreaseInterval * (1f + paranoidLevel * paranoidReturnSlowdownPerLevel + LevelParanoia.ReturnSlowdown);
         if (returnDecreaseTimer < adjustedInterval)
             return;
 

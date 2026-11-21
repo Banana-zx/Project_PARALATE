@@ -157,6 +157,14 @@ public class XGearSystem : MonoBehaviour
         return true;
     }
 
+    /// <summary>ตั้งจำนวน Charge ตรงๆ (ใช้ตอนโหลดเซฟ)</summary>
+    public void SetCharges(int value)
+    {
+        usedThisMission = true;
+        charges = string.IsNullOrEmpty(XGearLoadout.ActiveId) ? 0 : Mathf.Clamp(value, 0, MaxCharges);
+        RefreshChargeBar();
+    }
+
     /// <summary>เติม X-Gear (X-Gear Cell) คืน false ถ้าไม่มี Active Chip หรือเต็มแล้ว (ไอเทมจะไม่ถูกใช้)</summary>
     public bool AddCharges(int amount, out string reason)
     {
@@ -322,6 +330,7 @@ public static class PlayerSystems
         GameObject go = player.gameObject;
 
         if (go.GetComponent<XGearSystem>() == null) go.AddComponent<XGearSystem>();
+        if (go.GetComponent<CommandLineUI>() == null) go.AddComponent<CommandLineUI>();
 
         // Eye Wide อยู่บนวัตถุลูกชื่อ "EyeWide" ตัวเดียว: ถ้าใน Prefab/Scene วางไว้แล้ว (ปรับค่าใน Inspector ได้) ใช้ตัวนั้น
         // ถ้ายังไม่มีค่อยสร้างให้ จึงไม่มีทางเกิดสองตัวซ้อนกัน

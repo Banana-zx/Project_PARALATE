@@ -88,6 +88,13 @@ public class KnockoutPromptUI : MonoBehaviour
             EndCountdown();
     }
 
+    /// <summary>เปลี่ยนข้อความปุ่ม (KnockoutSystem ใช้สลับ "[F] to Strangle" กับ "[F] Kill [Ctrl hold] Knockout")</summary>
+    public void SetPromptText(string text)
+    {
+        if (promptText != null && promptText.text != text)
+            promptText.text = text;
+    }
+
     public void SetPromptVisible(bool visible)
     {
         // ครั้งแรกที่ได้ตัดสินใจ ฆ่า/ไว้ชีวิต: ปลดล็อกบันทึก "Kill or Not" (ปลดแล้วจะไม่ทำซ้ำ)

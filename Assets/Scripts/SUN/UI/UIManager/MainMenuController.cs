@@ -26,11 +26,23 @@ public class MainMenuController : MonoBehaviour
         LoadLevel(levelIndex);
     }
 
+    [Tooltip("หน้าต่าง Load Game ใน Scene นี้ (วัตถุ LoadGamePanel) ว่าง = หาเองใน Scene / ไม่มีใน Scene = สร้างจาก Prefab")]
+    public SaveLoadUI loadGamePanel;
+
+    /// <summary>ปุ่ม Load Game: เปิดหน้าต่างเลือกช่องเซฟ (ช่องเดียวกับที่เซฟในเกมด้วยสูตร SaveGame)</summary>
     public void OnLoadGamePressed()
     {
-        // โครงสร้างเผื่อระบบ Save/Load ในอนาคต
-        // เช่น: if (SaveSystem.HasSaveData()) LoadLevel(SaveSystem.GetSavedLevelIndex());
-        Debug.Log("Load Game Button Pressed - Ready for SaveSystem hook.");
+        if (loadGamePanel == null)
+            loadGamePanel = FindAnyObjectByType<SaveLoadUI>(FindObjectsInactive.Include);
+
+        if (loadGamePanel == null)
+        {
+            SaveSlotsView view = UIPrefabs.Spawn(SaveSlotsView.PrefabName, SaveSlotsView.BuildDefault);
+            loadGamePanel = view.gameObject.AddComponent<SaveLoadUI>();
+            loadGamePanel.mainMenuMode = true;
+        }
+
+        loadGamePanel.Show();
     }
 
     public void OnOptionPressed()

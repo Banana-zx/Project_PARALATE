@@ -65,6 +65,22 @@ public class RunInventory : MonoBehaviour
 
     public List<KeyValuePair<string, int>> Snapshot() => new List<KeyValuePair<string, int>>(collected);
 
+    /// <summary>แทนที่ของในรอบนี้ทั้งหมด (ใช้ตอนโหลดเซฟ)</summary>
+    public void ReplaceAll(IEnumerable<KeyValuePair<string, int>> items)
+    {
+        collected.Clear();
+        if (items != null)
+        {
+            foreach (KeyValuePair<string, int> pair in items)
+            {
+                if (!string.IsNullOrEmpty(pair.Key) && pair.Value > 0)
+                    collected[pair.Key] = pair.Value;
+            }
+        }
+
+        OnChanged?.Invoke();
+    }
+
     public void ClearRun()
     {
         if (collected.Count == 0)

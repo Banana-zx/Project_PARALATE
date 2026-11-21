@@ -19,9 +19,12 @@ using UnityEngine;
 /// Act As Enemy Eyes: หลัง Alert ตราบใดที่กล้องยังเห็นผู้เล่น กล้องจะส่งตำแหน่งผู้เล่นให้ศัตรูกลุ่มนั้นทุก Report Interval
 ///   ศัตรูจะไล่ล่าผู้เล่นตรงๆ เหมือนเห็นเอง (กล้อง = ตาของศัตรู)
 ///
+/// ยิงพังได้: เลือด Max Health (ค่าเริ่ม 10) หมดแล้วกล้องพัง หัวก้มลง กรวยสายตาดับ และไม่ทำอะไรอีก
+///   ต้องมี Collider ที่ตัวกล้อง (ถ้าไม่มี สคริปต์ใส่ BoxCollider ให้ชิ้นส่วนที่มี Mesh เอง)
+///
 /// วิธีใช้: ลาก Prefab SecurityCamera ไปติดผนัง/เพดาน ให้แกน Z (ลูกศรสีน้ำเงิน) ชี้ไปทางกึ่งกลางที่ต้องการให้มอง
 /// </summary>
-public class SecurityCamera : MonoBehaviour
+public class SecurityCamera : MonoBehaviour, IShootable
 {
     private enum State { Sweep, Hold, Track }
 
@@ -69,6 +72,15 @@ public class SecurityCamera : MonoBehaviour
     [Tooltip("แต่ละครั้งที่ได้รายงาน ศัตรูจะไล่ล่าอย่างน้อยกี่วินาที (แม้ตัวเองยังไม่เห็นผู้เล่น)")]
     [Min(0f)] public float chaseTimePerReport = 4f;
 
+    [Header("ยิงพังได้")]
+    [Min(0.1f)] public float maxHealth = 10f;
+    [Tooltip("พังแล้วหัวกล้องก้มลงกี่องศา")]
+    public float brokenTiltAngle = 45f;
+    [Tooltip("เสียงตอนพัง (ว่าง = ไฟล์ camera_break ในคลังเสียง ถ้ามี)")]
+    public AudioClip breakSound;
+    [Tooltip("เอฟเฟกต์ตอนพัง เช่น ประกายไฟ/ควัน (ไม่บังคับ) จะสร้างที่ตำแหน่งหัวกล้อง")]
+    public GameObject breakEffect;
+
     [Header("Vision Cone Visual")]
     public bool showVisionCone = true;
     public Color searchingColor = new Color(0.2f, 0.6f, 1f, 0.22f);
@@ -96,7 +108,11 @@ public class SecurityCamera : MonoBehaviour
     private Vector3[] coneVertices;
     private float groundY;
 
+    private float health;
+    private bool broken;
+
     public bool SeesPlayer => seesPlayer;
+    public bool IsBroken => broken;
 
     private void Reset()
     {
@@ -112,6 +128,61 @@ public class SecurityCamera : MonoBehaviour
             obstructionMask = LayerMask.GetMask("Obstacle");
 
         baseLocalRotation = head.localRotation;
+        health = maxHealth;
+        EnsureColliders();
+    }
+
+    // กระสุนต้องชนอะไรสักอย่าง: ชิ้นส่วนที่มี Mesh แต่ยังไม่มี Collider ได้ BoxCollider ขนาดพอดี Mesh
+    private void EnsureColliders()
+    {
+        if (GetComponentInChildren<Collider>() != null)
+            return;
+
+        foreach (MeshFilter mesh in GetComponentsInChildren<MeshFilter>())
+        {
+            if (mesh.transform == coneTransform)
+                continue;
+
+            mesh.gameObject.AddComponent<BoxCollider>();
+        }
+    }
+
+    /// <summary>โดนยิง (IShootable)</summary>
+    public void TakeShot(float damage, Vector3 hitPoint)
+    {
+        if (broken)
+            return;
+
+        health -= damage;
+        if (health <= 0f)
+            Break();
+    }
+
+    /// <summary>กล้องพัง: หยุดทุกอย่างถาวร</summary>
+    public void Break()
+    {
+        if (broken)
+            return;
+
+        broken = true;
+        health = 0f;
+        seesPlayer = false;
+        detectTimer = 0f;
+        calledEnemies.Clear();
+
+        if (coneTransform != null)
+            coneTransform.gameObject.SetActive(false);
+
+        if (head != null)
+            head.localRotation = baseLocalRotation * Quaternion.Euler(brokenTiltAngle, currentYaw, 0f);
+
+        if (breakSound != null)
+            AudioSource.PlayClipAtPoint(breakSound, head.position);
+        else
+            SfxLibrary.Play("camera_break", head.position);
+
+        if (breakEffect != null)
+            Instantiate(breakEffect, head.position, Quaternion.identity);
     }
 
     private void Start()
@@ -134,6 +205,9 @@ public class SecurityCamera : MonoBehaviour
 
     private void Update()
     {
+        if (broken)
+            return;
+
         if (Time.time >= nextVisionCheck)
         {
             nextVisionCheck = Time.time + 0.1f;
@@ -150,7 +224,8 @@ public class SecurityCamera : MonoBehaviour
 
     private void LateUpdate()
     {
-        UpdateCone();
+        if (!broken)
+            UpdateCone();
     }
 
     private void UpdateSweep()

@@ -17,6 +17,10 @@ public class EnemyHealth : MonoBehaviour
     [Header("Death Settings")]
     public DeathAction onDeath;
 
+    [Header("Stealth Takedown")]
+    [Tooltip("ต้องกด Ctrl ค้างกี่วินาทีเพื่อรัดคอศัตรูชนิดนี้จนหมดสติ (ศัตรูตัวใหญ่/หัวหน้า ตั้งให้นานขึ้น)")]
+    [Min(0.1f)] public float chokeHoldSeconds = 3f;
+
     private bool isDead = false;
     private bool isStunned = false;
     private Quaternion standingRotation;
@@ -120,7 +124,41 @@ public class EnemyHealth : MonoBehaviour
             healthBarFill.fillAmount = currentHealth / maxHealth;
     }
 
+    /// <summary>ฆ่าทันทีด้วยวิธีตายที่กำหนด (เช่น แทงคอจากด้านหลัง = FallOver ศพนอนบนพื้น)</summary>
+    public void Kill(DeathAction action)
+    {
+        if (isDead)
+            return;
+
+        currentHealth = 0f;
+        UpdateHealthBar();
+        Die(action);
+    }
+
+    /// <summary>ถูกรัดคอจนหมดสติ: นับเป็นศัตรูที่ถูกจัดการแล้ว ร่างหายไปจากฉาก</summary>
+    public void Vanish()
+    {
+        if (isDead)
+            return;
+
+        isDead = true;
+        isStunned = false;
+
+        if (knockOutRoutine != null)
+        {
+            StopCoroutine(knockOutRoutine);
+            knockOutRoutine = null;
+        }
+
+        gameObject.SetActive(false);
+    }
+
     private void Die()
+    {
+        Die(onDeath);
+    }
+
+    private void Die(DeathAction action)
     {
         isDead = true;
 
@@ -135,7 +173,7 @@ public class EnemyHealth : MonoBehaviour
         isStunned = false;
         SetMovementLocked(true);
 
-        switch (onDeath)
+        switch (action)
         {
             case DeathAction.Destroy:
                 Destroy(gameObject);

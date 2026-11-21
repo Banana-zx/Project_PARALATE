@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LogEntryData
   id: kill_or_not
   title: Kill or Not
-  body: "Sneak up behind an enemy to grab them.\n\n\u2022 Hold <b>F</b> to kill\n\u2022
-    Hold <b>Left Ctrl</b> to spare them (knock out)\n\nLet go before the bar finishes
-    to cancel. The choice is yours."
+  body: "Sneak up behind an enemy who has not noticed you.\n\n\u2022 Press <b>F</b>
+    to grab them (strangle)\n\u2022 Then press <b>F</b> again to stab: the enemy
+    dies and the body stays on the floor\n\u2022 Or hold <b>Ctrl</b> to choke them
+    out: the body is gone\n\nWait too long and they break free."
   unlockAtStart: 0
   order: 2

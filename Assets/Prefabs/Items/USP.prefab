@@ -215,6 +215,10 @@ MonoBehaviour:
   range: 100
   damage: 50
   fireRate: 0.3
+  ammoType: 0
+  slotType: 0
+  headshotMultiplier: 0
+  forceScopeOverlay: 0
   hitMask:
     serializedVersion: 2
     m_Bits: 32755
@@ -223,6 +227,7 @@ MonoBehaviour:
   reloadDuration: 4
   reloadMovementSpeedMultiplier: 0.8
   autoReloadWhenEmpty: 0
+  commandCooldown: 20
   crosshairUI: {fileID: 0}
   isHeld: 0
   showDebugLine: 1

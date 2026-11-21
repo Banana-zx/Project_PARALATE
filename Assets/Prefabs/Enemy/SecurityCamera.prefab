@@ -83,15 +83,25 @@ MonoBehaviour:
   turnSpeed: 25
   holdTime: 1.5
   viewRadius: 12
+  nearBlindDistance: 2.5
   viewAngle: 50
   obstructionMask:
     serializedVersion: 2
     m_Bits: 512
   playerTag: Player
   detectTime: 1.2
-  alertRadius: 25
   alertCooldown: 6
   alertSound: {fileID: 0}
+  linkedEnemies: []
+  room: {fileID: 0}
+  alertRadius: 25
+  actAsEnemyEyes: 1
+  reportInterval: 0.5
+  chaseTimePerReport: 4
+  maxHealth: 10
+  brokenTiltAngle: 45
+  breakSound: {fileID: 0}
+  breakEffect: {fileID: 0}
   showVisionCone: 1
   searchingColor: {r: 0.2, g: 0.6, b: 1, a: 0.22}
   detectingColor: {r: 1, g: 0.85, b: 0.1, a: 0.3}
@@ -108,6 +118,7 @@ GameObject:
   - component: {fileID: 6152214900635902264}
   - component: {fileID: 4274675628268463064}
   - component: {fileID: 3295786979339453733}
+  - component: {fileID: 7707649030596431883}
   m_Layer: 0
   m_Name: Mount
   m_TagString: Untagged
@@ -187,6 +198,27 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!65 &7707649030596431883
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6893416925869836702}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.99999994, y: 0.99999994, z: 0.99999994}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &7200014566044690333
 GameObject:
   m_ObjectHideFlags: 0
@@ -198,6 +230,7 @@ GameObject:
   - component: {fileID: 3356451469531573987}
   - component: {fileID: 3794392421757779274}
   - component: {fileID: 6865393576983759208}
+  - component: {fileID: 2427743195311776171}
   m_Layer: 0
   m_Name: Body
   m_TagString: Untagged
@@ -277,3 +310,24 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!65 &2427743195311776171
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7200014566044690333}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}

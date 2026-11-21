@@ -69,6 +69,16 @@ public static class XGearLoadout
         return true;
     }
 
+    /// <summary>ตั้งของในช่องตรงๆ โดยไม่หัก/คืนคลัง (ใช้ตอนโหลดเซฟ ที่คืนค่าคลังทั้งก้อนแยกอยู่แล้ว)</summary>
+    public static void SetRaw(string passive, string active, string map)
+    {
+        PlayerPrefs.SetString(PassiveKey, passive ?? string.Empty);
+        PlayerPrefs.SetString(ActiveKey, active ?? string.Empty);
+        PlayerPrefs.SetString(MapKey, map ?? string.Empty);
+        PlayerPrefs.Save();
+        OnChanged?.Invoke();
+    }
+
     public static void ResetSave()
     {
         PlayerPrefs.DeleteKey(PassiveKey);

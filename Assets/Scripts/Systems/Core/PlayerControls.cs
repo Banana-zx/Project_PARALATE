@@ -16,6 +16,7 @@ public static class PlayerControls
     public const string EyeWide = "EyeWide";       // T: เข้า/ออก Eye Wide
     public const string Zoom = "Zoom";             // ลูกกลิ้ง: ซูม Eye Wide
     public const string CameraLook = "CameraLook"; // เมาส์ขยับ / right stick: หมุนกล้อง
+    public const string Command = "Command";       // Q: เปิด/ยืนยัน CommandLine (ใส่ลูกศรด้วยปุ่มเดิน WASD)
 
     private static PlayerInput cached;
     private static int lastSearchFrame = -1;

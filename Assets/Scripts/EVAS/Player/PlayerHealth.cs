@@ -84,6 +84,16 @@ public class PlayerHealth : MonoBehaviour
         return true;
     }
 
+    /// <summary>ตั้งเลือดตรงๆ (ใช้ตอนโหลดเซฟ)</summary>
+    public void SetHealth(float value)
+    {
+        if (isDead)
+            return;
+
+        health = Mathf.Clamp(value, 1f, maxHealth > 0f ? maxHealth : value);
+        UpdateHealthBar();
+    }
+
     public void Respawn()
     {
         isDead = false;
